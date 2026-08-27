@@ -1,0 +1,13 @@
+import { ArrowLeft, BadgeCheck, Gem, Scale, ShieldCheck } from 'lucide-react'
+import { Link, useLocation } from 'react-router-dom'
+
+const content: Record<string, { title: string; lead: string; sections: Array<{ title: string; text: string }> }> = {
+  '/about': { title: 'درباره مبین سیلور', lead: 'روایت اعتماد، اصالت و انتخاب آگاهانه در بازار فلزات ارزشمند.', sections: [{ title: 'ماموریت ما', text: 'مبین سیلور با تمرکز بر شفافیت عیار، قیمت‌گذاری روشن و تحویل امن شکل گرفته است تا خرید فلزات ارزشمند تجربه‌ای قابل اعتماد و حرفه‌ای باشد.' }, { title: 'استاندارد اصالت', text: 'تمامی شمش‌ها و زیورآلات پیش از عرضه کارشناسی می‌شوند و همراه با فاکتور رسمی و مشخصات کامل عیار و وزن به مشتری تحویل داده می‌شوند.' }] },
+  '/guide': { title: 'راهنمای خرید', lead: 'پیش از انتخاب شمش یا زیورآلات، این نکات کلیدی را در نظر بگیرید.', sections: [{ title: 'عیار و وزن', text: 'عیار نشان‌دهنده میزان خلوص فلز است. شمش نقره معمولاً با عیار ۹۹۹ و شمش طلا با عیار ۹۹۹٫۹ عرضه می‌شود؛ زیورآلات نقره اغلب عیار ۹۲۵ دارند.' }, { title: 'سرمایه‌گذاری یا استفاده', text: 'برای سرمایه‌گذاری، شمش با هزینه ساخت کمتر انتخاب مناسب‌تری است. برای استفاده روزمره و هدیه، زیورآلات دست‌ساز ارزش هنری بیشتری ایجاد می‌کنند.' }, { title: 'نگهداری امن', text: 'فلزات را در محیط خشک، دور از مواد شیمیایی و داخل بسته‌بندی اصلی نگه دارید. فاکتور و شناسنامه اصالت را نیز محفوظ نگه دارید.' }] },
+  '/terms': { title: 'شرایط و قوانین', lead: 'چارچوب شفاف خرید، ارسال و بازگشت کالا در مبین سیلور.', sections: [{ title: 'تثبیت قیمت', text: 'به دلیل نوسان بازار فلزات، قیمت سفارش پس از آغاز پرداخت برای مدت محدود تثبیت می‌شود.' }, { title: 'ارسال و تحویل', text: 'سفارش‌ها با بسته‌بندی ایمن و پوشش بیمه‌ای ارسال می‌شوند و تحویل کالا نیازمند تطابق هویت گیرنده است.' }, { title: 'بازگشت کالا', text: 'در صورت مغایرت مشخصات یا آسیب‌دیدگی بسته‌بندی، درخواست بررسی باید حداکثر تا ۲۴ ساعت پس از تحویل ثبت شود.' }] },
+}
+
+export function InfoPage() {
+  const { pathname } = useLocation(); const page = content[pathname] ?? content['/about']
+  return <section className="info-page"><div className="info-hero"><div className="container"><Gem /><h1>{page.title}</h1><p>{page.lead}</p></div></div><div className="container info-content"><aside><ShieldCheck /><b>تعهد مبین</b><p>اصالت کالا، قیمت‌گذاری شفاف و پشتیبانی حرفه‌ای.</p><Scale /><b>فاکتور رسمی</b><p>شرح کامل وزن، عیار و مبلغ خرید.</p></aside><article>{page.sections.map(section => <section key={section.title}><BadgeCheck /><div><h2>{section.title}</h2><p>{section.text}</p></div></section>)}<Link className="button button--emerald" to="/shop">مشاهده محصولات <ArrowLeft /></Link></article></div></section>
+}

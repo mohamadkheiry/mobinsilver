@@ -1,0 +1,11 @@
+import { Minus, Plus, ShoppingBag, Trash2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { EmptyState } from '../components/EmptyState'
+import { useCart } from '../contexts/CartContext'
+import { toman } from '../lib/format'
+
+export function CartPage() {
+  const cart = useCart()
+  if (!cart.items.length) return <section className="section"><div className="container"><EmptyState title="سبد خرید شما خالی است" description="محصول موردنظرتان را از میان مجموعه‌های مبین سیلور انتخاب کنید." /></div></section>
+  return <section className="cart-page section"><div className="container"><div className="page-title-row"><div><span>خرید امن</span><h1>سبد خرید</h1></div><ShoppingBag /></div><div className="cart-layout"><div className="cart-list">{cart.items.map(item => <article className="cart-item" key={item.product.id}><img src={item.product.imageUrl} alt={item.product.name} /><div className="cart-item__info"><h2>{item.product.name}</h2><span>عیار {item.product.purity} · {item.product.weight}</span><strong>{toman(item.product.price)}</strong></div><div className="quantity"><button onClick={() => cart.update(item.product.id, item.quantity + 1)}><Plus /></button><span>{new Intl.NumberFormat('fa-IR').format(item.quantity)}</span><button onClick={() => item.quantity === 1 ? cart.remove(item.product.id) : cart.update(item.product.id, item.quantity - 1)}><Minus /></button></div><button className="remove-button" onClick={() => cart.remove(item.product.id)} aria-label="حذف"><Trash2 /></button></article>)}</div><aside className="order-summary"><h2>خلاصه سفارش</h2><div><span>جمع کالاها</span><strong>{toman(cart.total)}</strong></div><div><span>هزینه ارسال بیمه‌شده</span><strong>رایگان</strong></div><div className="order-summary__total"><span>مبلغ قابل پرداخت</span><strong>{toman(cart.total)}</strong></div><Link className="button button--emerald button--full" to="/checkout">ادامه و ثبت سفارش</Link><Link className="text-link centered" to="/shop">ادامه خرید</Link><p>قیمت فلزات در مرحلهٔ نهایی برای ۱۰ دقیقه تثبیت می‌شود.</p></aside></div></div></section>
+}
