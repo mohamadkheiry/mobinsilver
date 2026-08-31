@@ -57,6 +57,24 @@ erDiagram
         int Quantity
         decimal UnitPrice
     }
+
+    BLOG_POST {
+        int Id PK
+        string Title
+        string Slug UK
+        string Excerpt
+        string Content
+        string CoverImageUrl
+        string Category
+        string Author
+        string Tags
+        int ReadingMinutes
+        bool Featured
+        bool IsPublished
+        datetime PublishedAt
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
 ```
 
 ## 2. موجودیت‌ها
@@ -83,6 +101,10 @@ snapshot اطلاعات تحویل و پرداخت در لحظه سفارش را
 
 قیمت و نام محصول را در لحظه سفارش snapshot می‌کند؛ بنابراین تغییر نام یا قیمت محصول روی فاکتور تاریخی اثر ندارد. رابطه با `Product` برای ردیابی محصول اصلی باقی می‌ماند.
 
+### BlogPost
+
+محتوای مجله را نگه می‌دارد. `Slug` یکتا و مبنای URL مقاله است. ترکیب `IsPublished` و `PublishedAt` تعیین می‌کند مقاله در API عمومی دیده شود یا به‌صورت پیش‌نویس/زمان‌بندی‌شده فقط در پنل مدیر باقی بماند. index ترکیبی روی این دو فیلد query انتشار را پشتیبانی می‌کند.
+
 ## 3. قواعد یکپارچگی فعلی
 
 - سفارش باید حداقل یک قلم داشته باشد؛ این قاعده در endpoint کنترل می‌شود.
@@ -91,7 +113,7 @@ snapshot اطلاعات تحویل و پرداخت در لحظه سفارش را
 - موجودی هنگام ایجاد سفارش کم می‌شود.
 - سفارش فقط به کاربر احرازشده تعلق می‌گیرد.
 - query سفارش مشتری با `UserId` claim محدود می‌شود.
-- index یکتا برای Username، Email، Slug و OrderNumber وجود دارد.
+- index یکتا برای Username، Email، Slug محصول، Slug مقاله و OrderNumber وجود دارد.
 
 ## 4. وضعیت سفارش
 
@@ -140,4 +162,3 @@ erDiagram
 ```
 
 بخش هدف برای برنامه‌ریزی توسعه است و در schema فعلی وجود ندارد.
-

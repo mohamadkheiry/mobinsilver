@@ -6,6 +6,8 @@ import { CartProvider } from './contexts/CartContext'
 import { FavoritesProvider } from './contexts/FavoritesContext'
 import { AdminDashboardPage } from './pages/AdminDashboardPage'
 import { CartPage } from './pages/CartPage'
+import { BlogPage } from './pages/BlogPage'
+import { BlogPostPage } from './pages/BlogPostPage'
 import { CheckoutPage } from './pages/CheckoutPage'
 import { HomePage } from './pages/HomePage'
 import { InfoPage } from './pages/InfoPage'
@@ -17,7 +19,7 @@ import { UserDashboardPage } from './pages/UserDashboardPage'
 
 export default function App() {
   return <BrowserRouter><AuthProvider><CartProvider><FavoritesProvider><Routes>
-    <Route element={<StoreLayout />}><Route index element={<HomePage />} /><Route path="shop" element={<ShopPage />} /><Route path="product/:slug" element={<ProductPage />} /><Route path="cart" element={<CartPage />} /><Route path="checkout" element={<CheckoutPage />} /><Route path="about" element={<InfoPage />} /><Route path="guide" element={<InfoPage />} /><Route path="terms" element={<InfoPage />} /></Route>
+    <Route element={<StoreLayout />}><Route index element={<HomePage />} /><Route path="shop" element={<ShopPage />} /><Route path="product/:slug" element={<ProductPage />} /><Route path="blog" element={<BlogPage />} /><Route path="blog/:slug" element={<BlogPostPage />} /><Route path="cart" element={<CartPage />} /><Route path="checkout" element={<CheckoutPage />} /><Route path="about" element={<InfoPage />} /><Route path="guide" element={<InfoPage />} /><Route path="terms" element={<InfoPage />} /></Route>
     <Route path="login" element={<LoginPage />} />
     <Route path="dashboard" element={<ProtectedRoute role="Customer"><UserDashboardPage /></ProtectedRoute>} />
     <Route path="admin" element={<ProtectedRoute role="Admin"><AdminDashboardPage /></ProtectedRoute>} />

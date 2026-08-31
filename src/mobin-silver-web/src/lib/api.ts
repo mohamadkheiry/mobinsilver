@@ -1,4 +1,4 @@
-import type { AuthResponse, CustomerSummary, DashboardStats, Order, Product, User } from '../types'
+import type { AuthResponse, BlogPost, BlogPostPayload, CustomerSummary, DashboardStats, Order, Product, User } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -23,6 +23,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 export const api = {
   products: (params = '') => request<Product[]>(`/api/products${params}`),
   product: (slug: string) => request<Product>(`/api/products/${slug}`),
+  blogPosts: (params = '') => request<BlogPost[]>(`/api/blog${params}`),
+  blogPost: (slug: string) => request<BlogPost>(`/api/blog/${slug}`),
   login: (username: string, password: string) => request<AuthResponse>('/api/auth/login', {
     method: 'POST', body: JSON.stringify({ username, password }),
   }),
@@ -47,4 +49,12 @@ export const api = {
     method: 'PUT', body: JSON.stringify(body),
   }),
   deleteProduct: (id: number) => request<void>(`/api/admin/products/${id}`, { method: 'DELETE' }),
+  adminBlog: () => request<BlogPost[]>('/api/admin/blog'),
+  createBlogPost: (body: BlogPostPayload) => request<BlogPost>('/api/admin/blog', {
+    method: 'POST', body: JSON.stringify(body),
+  }),
+  updateBlogPost: (id: number, body: BlogPostPayload) => request<BlogPost>(`/api/admin/blog/${id}`, {
+    method: 'PUT', body: JSON.stringify(body),
+  }),
+  deleteBlogPost: (id: number) => request<void>(`/api/admin/blog/${id}`, { method: 'DELETE' }),
 }

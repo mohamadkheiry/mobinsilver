@@ -11,6 +11,7 @@
 | [مرجع API](api-reference.md) | Frontend، Backend و QA | endpointها، سطح دسترسی و قراردادها |
 | [امنیت](security.md) | توسعه، DevOps و مدیر محصول | threat model، اسرار، احراز هویت و hardening |
 | [تست](testing.md) | QA و توسعه | هرم تست، سناریوها و معیار پذیرش |
+| [مجله](blog.md) | تحریریه، Frontend و Backend | مدل داده، قالب محتوا و گردش انتشار |
 | [عملیات و پشتیبانی](operations-support.md) | پشتیبانی و DevOps | مانیتورینگ، رخداد، بکاپ و runbook |
 | [نقشه راه](roadmap.md) | مالک محصول و تیم فنی | شکاف‌های production و اولویت توسعه |
 | [Use Caseها](diagrams/use-cases.md) | محصول، تحلیل و توسعه | بازیگران، قابلیت‌ها و شرح سناریوها |
@@ -36,4 +37,3 @@
 3. secret، token، اطلاعات شخصی واقعی و آدرس production در مثال‌ها قرار نگیرد.
 4. تغییر شکستن قرارداد API باید همراه برنامه migration و نسخه‌بندی باشد.
 5. تاریخچه تصمیم مهم معماری در بخش تصمیم‌های [architecture.md](architecture.md) ثبت شود.
-

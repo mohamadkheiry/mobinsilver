@@ -50,6 +50,7 @@ Vite در محیط توسعه درخواست‌های `/api` را به `http://1
 
 - `Program.cs`: ثبت سرویس‌ها، middlewareها و endpointهای Minimal API
 - `Data/AppDbContext.cs`: DbContext، نگاشت و seed داده‌های نمایشی
+- `Data/BlogSeed.cs`: ساخت سازگار جدول مجله برای دیتابیس موجود و محتوای اولیه
 - `Models/Entities.cs`: موجودیت‌ها و قراردادهای درخواست
 - `Services/PasswordService.cs`: تولید و بررسی هش PBKDF2
 - `Services/TokenService.cs`: صدور JWT
@@ -64,6 +65,7 @@ Vite در محیط توسعه درخواست‌های `/api` را به `http://1
 - `src/lib/api.ts`: client ارتباط با API و مدیریت header احراز هویت
 - `src/styles.css`: توکن‌ها، کامپوننت‌ها و responsive styling
 - `public/assets/`: تصاویر محصول و هویت بصری
+- `e2e/`: سناریوهای Playwright برای فروشگاه، مجله، موبایل و ادمین
 
 ## 4. تنظیمات محیط توسعه
 
@@ -80,7 +82,7 @@ dotnet run --urls http://127.0.0.1:5088
 
 ## 5. پایگاه داده و Seed
 
-نسخه فعلی برای شروع سریع از `EnsureCreated` و SQLite استفاده می‌کند. در نخستین اجرا، حساب‌های نمایشی، محصولات و سفارش‌های نمونه ایجاد می‌شوند.
+نسخه فعلی برای شروع سریع از `EnsureCreated` و SQLite استفاده می‌کند. در نخستین اجرا، حساب‌های نمایشی، محصولات، سفارش‌ها و پنج مقاله تخصصی ایجاد می‌شوند. `BlogSeed.EnsureSchema` برای ارتقای نصب‌های SQLite قدیمی جدول مجله را به‌صورت idempotent می‌سازد؛ تغییرات بعدی بهتر است به migration استاندارد EF منتقل شوند.
 
 برای توسعه بلندمدت و تغییرات schema:
 
@@ -167,6 +169,7 @@ dotnet build src/MobinSilver.Api/MobinSilver.Api.csproj -c Release
 cd src/mobin-silver-web
 npm ci
 npm run build
+npm run test:e2e
 npm audit --omit=dev
 ```
 
@@ -177,6 +180,7 @@ npm audit --omit=dev
 - ثبت‌نام، ورود و خروج
 - دسترسی غیرمجاز مشتری به `/admin`
 - ورود مدیر و مشاهده تمام بخش‌های داشبورد
+- جستجو و فیلتر مجله، صفحه مقاله و مدیریت مقاله ادمین
 - تغییر وضعیت سفارش و مشاهده آن در داشبورد مشتری
 - عرض موبایل 390 پیکسل بدون overflow
 - نبود خطای Console و درخواست شبکه شکست‌خورده غیرمنتظره
@@ -218,4 +222,3 @@ Get-NetTCPConnection -LocalPort 5088 -ErrorAction SilentlyContinue
 - [تست](docs/testing.md)
 - [استقرار](deployment.md)
 - [پشتیبانی](docs/operations-support.md)
-

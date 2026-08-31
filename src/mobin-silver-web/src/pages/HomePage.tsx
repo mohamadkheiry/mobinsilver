@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, BadgeCheck, FileCheck2, ShieldCheck, Truck } from 'lucide-react'
+import { ArrowLeft, BadgeCheck, BookOpenText, FileCheck2, ShieldCheck, Truck } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { ProductCard } from '../components/ProductCard'
+import { BlogCard } from '../components/BlogCard'
 import { api } from '../lib/api'
-import type { Product } from '../types'
+import type { BlogPost, Product } from '../types'
 
 const categories = [
   { key: 'silver-bar', title: 'شمش نقره', copy: 'شمش‌های نقره با عیار ۹۹۹ از برندهای معتبر', image: '/assets/silver-bar.png' },
@@ -13,14 +14,15 @@ const categories = [
 
 export function HomePage() {
   const [products, setProducts] = useState<Product[]>([])
+  const [posts, setPosts] = useState<BlogPost[]>([])
   const [active, setActive] = useState('all')
-  useEffect(() => { api.products('?featured=true').then(setProducts).catch(() => setProducts([])) }, [])
+  useEffect(() => { Promise.all([api.products('?featured=true'), api.blogPosts()]).then(([nextProducts, nextPosts]) => { setProducts(nextProducts); setPosts(nextPosts) }).catch(() => { setProducts([]); setPosts([]) }) }, [])
   const shown = active === 'all' ? products.slice(0, 4) : products.filter(x => x.category === active).slice(0, 4)
   return (
     <>
       <section className="hero">
         <div className="container hero__grid">
-          <div className="hero__copy"><h1>ارزش ماندگار، درخشش اصیل</h1><p>گزیده‌ای از شمش‌های معتبر و زیورآلات نقره با ضمانت اصالت</p><div className="hero__actions"><Link className="button button--emerald" to="/shop">مشاهده محصولات</Link><Link className="button button--ghost-light" to="/guide">راهنمای خرید</Link></div></div>
+          <div className="hero__copy"><span className="eyebrow">مبین سیلور • اصالت در هر انتخاب</span><h1>ارزش ماندگار،<br />درخشش اصیل</h1><p>گزیده‌ای از شمش‌های معتبر و زیورآلات نقره با ضمانت اصالت</p><div className="hero__actions"><Link className="button button--emerald" to="/shop">مشاهده محصولات</Link><Link className="button button--ghost-light" to="/guide">راهنمای خرید</Link></div></div>
           <div className="hero__media"><img src="/assets/hero-products.png" alt="شمش نقره، شمش طلا و زیورآلات نقره مبین سیلور" /></div>
         </div>
       </section>
@@ -42,6 +44,8 @@ export function HomePage() {
       <section className="trust-band"><div className="container trust-band__grid"><div className="trust-band__visual"><img src="/assets/silver-bar.png" alt="شمش نقره اصیل" /></div><div className="trust-band__content"><h2>خرید مطمئن فلزات ارزشمند</h2><div className="trust-points"><div><ShieldCheck /><span><strong>ضمانت اصالت</strong><small>تضمین عیار و سلامت کالا</small></span></div><div><FileCheck2 /><span><strong>فاکتور رسمی</strong><small>شفافیت کامل در خرید</small></span></div><div><Truck /><span><strong>ارسال بیمه‌شده</strong><small>بسته‌بندی امن تا مقصد</small></span></div></div></div></div></section>
 
       <section className="guide-section section"><div className="container guide-section__grid"><div className="guide-visual"><span className="guide-book"><BadgeCheck /><b>راهنمای خرید</b></span><img src="/assets/gold-bar.png" alt="شمش طلا" /></div><div><h2>انتخاب آگاهانه، خرید آسوده</h2><p>در راهنمای خرید مبین سیلور با تفاوت عیارها، شیوهٔ نگهداری و نکات مهم پیش از خرید شمش و زیورآلات آشنا شوید.</p><Link className="button button--outline" to="/guide">مطالعه راهنمای خرید <ArrowLeft /></Link></div></div></section>
+
+      {posts.length ? <section className="section home-journal"><div className="container"><div className="home-journal__heading"><div><span className="eyebrow"><BookOpenText /> مجله مبین</span><h2>دانش ارزشمند، برای انتخابی ماندگار</h2><p>از تشخیص اصالت تا سرمایه‌گذاری و مراقبت؛ راهنماهایی که پیش و پس از خرید کنار شما هستند.</p></div><Link className="text-link" to="/blog">همه مقاله‌ها <ArrowLeft /></Link></div><div className="related-grid">{posts.slice(0, 3).map(post => <BlogCard post={post} key={post.id} />)}</div></div></section> : null}
     </>
   )
 }

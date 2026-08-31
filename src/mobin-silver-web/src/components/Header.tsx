@@ -10,6 +10,7 @@ const links = [
   { to: '/shop?category=silver-bar', label: 'شمش نقره' },
   { to: '/shop?category=silver-jewelry', label: 'زیورآلات نقره' },
   { to: '/shop?category=gold-bar', label: 'شمش طلا' },
+  { to: '/blog', label: 'مجله' },
   { to: '/about', label: 'درباره ما' },
 ]
 
@@ -26,7 +27,7 @@ export function Header() {
           <Brand />
           <nav className={`main-nav ${open ? 'main-nav--open' : ''}`} aria-label="ناوبری اصلی">
             <button className="icon-button nav-close" onClick={() => setOpen(false)} aria-label="بستن منو"><X /></button>
-            {links.map(link => <NavLink key={link.to} to={link.to} onClick={() => setOpen(false)}>{link.label}</NavLink>)}
+            {links.map(link => <NavLink key={link.to} to={link.to} end={link.to === '/'} onClick={() => setOpen(false)}>{link.label}</NavLink>)}
           </nav>
           <div className="header__actions">
             <Link className="icon-button hide-mobile" to="/shop" aria-label="جستجوی محصولات"><Search /></Link>

@@ -64,3 +64,22 @@ public class OrderItem
     public int Quantity { get; set; }
     public decimal UnitPrice { get; set; }
 }
+
+public class BlogPost
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Slug { get; set; } = string.Empty;
+    public string Excerpt { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public string CoverImageUrl { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    public string Author { get; set; } = "تحریریه مبین سیلور";
+    public string Tags { get; set; } = string.Empty;
+    public int ReadingMinutes { get; set; } = 5;
+    public bool Featured { get; set; }
+    public bool IsPublished { get; set; } = true;
+    public DateTime? PublishedAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}

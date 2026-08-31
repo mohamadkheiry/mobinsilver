@@ -2,6 +2,7 @@
 **/obj/
 **/node_modules/
 **/dist/
+src/MobinSilver.Api/wwwroot/
 **/*.tsbuildinfo
 **/vite.config.js
 **/vite.config.d.ts
@@ -11,6 +12,9 @@
 artifacts/
 coverage/
 TestResults/
+**/test-results/
+**/playwright-report/
+qa/logs/
 .vs/
 .vscode/*.local.json
 .env

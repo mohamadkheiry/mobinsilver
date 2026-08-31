@@ -14,6 +14,8 @@ Content-Type: application/json
 | GET | `/api/health` | عمومی | سلامت سرویس |
 | GET | `/api/products` | عمومی | فهرست و فیلتر محصولات |
 | GET | `/api/products/{slug}` | عمومی | جزئیات محصول |
+| GET | `/api/blog` | عمومی | فهرست مقاله‌های منتشرشده |
+| GET | `/api/blog/{slug}` | عمومی | جزئیات مقاله منتشرشده |
 | POST | `/api/auth/login` | عمومی | ورود |
 | POST | `/api/auth/register` | عمومی | ثبت‌نام مشتری |
 | GET | `/api/account/profile` | احرازشده | پروفایل جاری |
@@ -27,6 +29,10 @@ Content-Type: application/json
 | POST | `/api/admin/products` | Admin | ایجاد محصول |
 | PUT | `/api/admin/products/{id}` | Admin | ویرایش محصول |
 | DELETE | `/api/admin/products/{id}` | Admin | حذف محصول |
+| GET | `/api/admin/blog` | Admin | تمام مقاله‌ها و پیش‌نویس‌ها |
+| POST | `/api/admin/blog` | Admin | ایجاد مقاله |
+| PUT | `/api/admin/blog/{id}` | Admin | ویرایش مقاله |
+| DELETE | `/api/admin/blog/{id}` | Admin | حذف مقاله |
 
 ## 2. سلامت
 
@@ -82,7 +88,44 @@ GET /api/products?category=silver-bar&featured=true
 }
 ```
 
-## 4. احراز هویت
+## 4. مجله
+
+### `GET /api/blog`
+
+فقط مقاله‌هایی را برمی‌گرداند که منتشر شده و زمان `publishedAt` آن‌ها گذشته باشد. پارامترهای اختیاری:
+
+| نام | کاربرد |
+|---|---|
+| `category` | تطبیق دقیق دسته یا `all` |
+| `search` | جستجو در عنوان، خلاصه و برچسب |
+| `featured` | محدودسازی مقاله ویژه |
+
+### `GET /api/blog/{slug}`
+
+مقاله منتشرشده را با slug یا شناسه برمی‌گرداند. پیش‌نویس، مقاله زمان‌بندی‌شده یا شناسه ناموجود پاسخ `404` دارد.
+
+### قرارداد مدیریت مقاله
+
+```json
+{
+  "title": "راهنمای تشخیص نقره اصل از بدل",
+  "slug": "how-to-identify-authentic-silver",
+  "excerpt": "خلاصه مقاله...",
+  "content": "## عنوان بخش\n\nمتن مقاله...",
+  "coverImageUrl": "/assets/blog-authentic-silver.png",
+  "category": "دانش نقره",
+  "author": "تحریریه مبین سیلور",
+  "tags": "اصالت نقره,عیار ۹۲۵",
+  "readingMinutes": 8,
+  "featured": true,
+  "isPublished": true,
+  "publishedAt": "2026-08-31T08:00:00Z"
+}
+```
+
+عنوان حداقل ۵، خلاصه حداقل ۲۰ و متن حداقل ۸۰ نویسه است. slug فقط حروف لاتین، عدد و خط تیره می‌پذیرد و تکراری بودن آن `409` است. ایجاد `201`، ویرایش `200` و حذف `204` برمی‌گرداند.
+
+## 5. احراز هویت
 
 ### `POST /api/auth/login`
 
@@ -125,7 +168,7 @@ GET /api/products?category=silver-bar&featured=true
 
 ایمیل به‌عنوان Username نیز ذخیره می‌شود. ایمیل تکراری `400` است. در نسخه production باید validation پیچیدگی رمز، قالب ایمیل و rate limit افزوده شود.
 
-## 5. حساب مشتری
+## 6. حساب مشتری
 
 ### `GET /api/account/profile`
 
@@ -145,7 +188,7 @@ GET /api/products?category=silver-bar&featured=true
 
 فقط سفارش‌های کاربر جاری را همراه اقلام، از جدید به قدیم برمی‌گرداند.
 
-## 6. ثبت سفارش
+## 7. ثبت سفارش
 
 ### `POST /api/orders`
 
@@ -181,7 +224,7 @@ GET /api/products?category=silver-bar&featured=true
 }
 ```
 
-## 7. مدیریت
+## 8. مدیریت
 
 تمام endpointهای این بخش policy نقش `Admin` دارند.
 
@@ -232,7 +275,7 @@ GET /api/products?category=silver-bar&featured=true
 
 ایجاد موفق `201`، ویرایش موفق `200`، حذف موفق `204` و شناسه ناموجود `404` است.
 
-## 8. خطاها
+## 9. خطاها
 
 ساختار عمومی خطاهای کسب‌وکار:
 
@@ -249,9 +292,10 @@ GET /api/products?category=silver-bar&featured=true
 | `401` | token یا credential نامعتبر |
 | `403` | نقش فاقد مجوز |
 | `404` | منبع یافت نشد |
+| `409` | تعارض منبع یکتا مانند slug تکراری |
 | `500` | خطای غیرمنتظره؛ جزئیات فقط در log امن |
 
-## 9. قواعد نسخه‌بندی آینده
+## 10. قواعد نسخه‌بندی آینده
 
 پیش از انتشار عمومی API:
 
@@ -261,4 +305,3 @@ GET /api/products?category=silver-bar&featured=true
 - Problem Details استاندارد برای خطاها استفاده شود.
 - breaking change فقط در نسخه major جدید انجام شود.
 - idempotency برای سفارش و پرداخت پیاده‌سازی شود.
-

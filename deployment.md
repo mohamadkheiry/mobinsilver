@@ -2,6 +2,18 @@
 
 این سند مسیر استقرار امن و قابل پشتیبانی را از build تا rollback توضیح می‌دهد. معماری نمونه شامل reverse proxy، فرانت‌اند استاتیک و ASP.NET Core API است.
 
+## استقرار فعلی Mobin Silver
+
+- دامنه عمومی: `https://mobinsilver.00f.ir`
+- برنامه: یک artifact framework-dependent شامل ASP.NET Core و خروجی React در `wwwroot`؛ اجرا روی runtime نصب‌شده با `DOTNET_ROLL_FORWARD=Major`
+- مسیر پایه برنامه: `/opt/mobinsilver`
+- داده پایدار: `/opt/mobinsilver/shared/App_Data`
+- سرویس: `mobinsilver.service`
+- پورت داخلی Kestrel: `5098`
+- Reverse proxy: Nginx کانتینری مستقل؛ upstream برابر سرویس Kestrel
+
+رمز SSH، کلید JWT و فایل محیطی سرور هرگز در مخزن قرار نمی‌گیرند. Nginx و میزبان برنامه چند پروژه دیگر دارند؛ فقط service، مسیر و server block نام‌برده در این سند باید تغییر کنند.
+
 ## 1. پیش‌شرط‌های Production
 
 پیش از انتشار عمومی باید این موارد تعیین و فراهم شوند:
@@ -31,21 +43,24 @@
 
 ## 3. Build قابل تکرار
 
-از ریشه مخزن:
+از ریشه مخزن، ابتدا React را build و داخل `wwwroot` API کپی کنید، سپس artifact یکپارچه بسازید:
 
 ```powershell
-dotnet restore src/MobinSilver.Api/MobinSilver.Api.csproj
-dotnet publish src/MobinSilver.Api/MobinSilver.Api.csproj -c Release -o artifacts/api
-
 cd src/mobin-silver-web
 npm ci
 npm run build
+npm run test:e2e
+cd ../..
+
+# محتوای dist را در src/MobinSilver.Api/wwwroot قرار دهید
+dotnet restore src/MobinSilver.Api/MobinSilver.Api.csproj
+dotnet publish src/MobinSilver.Api/MobinSilver.Api.csproj -c Release --no-restore -o artifacts/mobinsilver-linux
 ```
 
 خروجی‌ها:
 
-- API: `artifacts/api`
-- Frontend: `src/mobin-silver-web/dist`
+- artifact یکپارچه: `artifacts/mobinsilver-linux`
+- خروجی میانی frontend: `src/mobin-silver-web/dist`
 
 قبل از استقرار، checksum artifactها و شناسه commit را در release ثبت کنید.
 
@@ -73,16 +88,20 @@ Description=Mobin Silver API
 After=network.target
 
 [Service]
-WorkingDirectory=/opt/mobinsilver/api
-ExecStart=/usr/bin/dotnet /opt/mobinsilver/api/MobinSilver.Api.dll
+WorkingDirectory=/opt/mobinsilver/current
+ExecStart=/usr/local/bin/dotnet /opt/mobinsilver/current/MobinSilver.Api.dll
 Restart=always
 RestartSec=5
 User=mobinsilver
+Group=mobinsilver
 Environment=ASPNETCORE_ENVIRONMENT=Production
-Environment=ASPNETCORE_URLS=http://127.0.0.1:5088
-EnvironmentFile=/etc/mobinsilver/api.env
+Environment=ASPNETCORE_URLS=http://0.0.0.0:5098
+Environment=DOTNET_ROLL_FORWARD=Major
+EnvironmentFile=/etc/mobinsilver.env
 NoNewPrivileges=true
 PrivateTmp=true
+ProtectHome=true
+ReadWritePaths=/opt/mobinsilver/shared/App_Data
 
 [Install]
 WantedBy=multi-user.target
@@ -90,27 +109,21 @@ WantedBy=multi-user.target
 
 فایل `/etc/mobinsilver/api.env` باید فقط برای کاربر سرویس قابل خواندن باشد و داخل Git قرار نگیرد.
 
-### Nginx نمونه
+### Nginx نمونه برای معماری یکپارچه
 
 ```nginx
 server {
     listen 443 ssl http2;
     server_name mobinsilver.example;
 
-    root /var/www/mobinsilver;
-    index index.html;
-
-    location /api/ {
-        proxy_pass http://127.0.0.1:5088;
+    location / {
+        proxy_pass http://app-server:5098;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
 }
 ```
 
@@ -156,6 +169,8 @@ SQLite برای نصب تک‌نمونه و ترافیک محدود مناسب �
 
 - `GET /api/health` برابر `200` و `healthy`
 - صفحه اصلی، assetها و فونت بدون 404
+- فهرست مجله، جستجو و یک صفحه مقاله
+- بخش مقالات ادمین و بازشدن فرم ایجاد مقاله
 - ورود مشتری و مدیر
 - مشاهده محصولات و جزئیات
 - افزودن سبد و ادامه خرید
@@ -203,4 +218,3 @@ SQLite برای نصب تک‌نمونه و ترافیک محدود مناسب �
 - [عملیات و پشتیبانی](docs/operations-support.md)
 - [راهبرد تست](docs/testing.md)
 - [معماری](docs/architecture.md)
-

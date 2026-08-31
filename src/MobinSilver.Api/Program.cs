@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using MobinSilver.Api.Data;
@@ -13,8 +14,14 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("Default")));
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
-    policy.WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
+    policy.WithOrigins("http://localhost:5173", "http://127.0.0.1:5173", "https://mobinsilver.00f.ir", "http://mobinsilver.00f.ir")
         .AllowAnyHeader().AllowAnyMethod()));
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 var jwtKey = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!);
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -37,7 +44,10 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 Directory.CreateDirectory(Path.Combine(app.Environment.ContentRootPath, "App_Data"));
+app.UseForwardedHeaders();
 app.UseCors("Frontend");
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -45,7 +55,9 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
+    BlogSeed.EnsureSchema(db);
     SeedData(db);
+    BlogSeed.Seed(db);
 }
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", service = "MobinSilver.Api" }));
@@ -63,6 +75,28 @@ app.MapGet("/api/products/{slug}", async (AppDbContext db, string slug) =>
 {
     var product = await db.Products.AsNoTracking().FirstOrDefaultAsync(x => x.Slug == slug || x.Id.ToString() == slug);
     return product is null ? Results.NotFound() : Results.Ok(product);
+});
+
+app.MapGet("/api/blog", async (AppDbContext db, string? category, string? search, bool? featured) =>
+{
+    var now = DateTime.UtcNow;
+    var query = db.BlogPosts.AsNoTracking().Where(x => x.IsPublished && x.PublishedAt != null && x.PublishedAt <= now);
+    if (!string.IsNullOrWhiteSpace(category) && category != "all") query = query.Where(x => x.Category == category);
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var term = search.Trim();
+        query = query.Where(x => x.Title.Contains(term) || x.Excerpt.Contains(term) || x.Tags.Contains(term));
+    }
+    if (featured is not null) query = query.Where(x => x.Featured == featured);
+    return Results.Ok(await query.OrderByDescending(x => x.Featured).ThenByDescending(x => x.PublishedAt).ToListAsync());
+});
+
+app.MapGet("/api/blog/{slug}", async (AppDbContext db, string slug) =>
+{
+    var now = DateTime.UtcNow;
+    var post = await db.BlogPosts.AsNoTracking().FirstOrDefaultAsync(x =>
+        (x.Slug == slug || x.Id.ToString() == slug) && x.IsPublished && x.PublishedAt != null && x.PublishedAt <= now);
+    return post is null ? Results.NotFound(new { message = "مقاله موردنظر پیدا نشد." }) : Results.Ok(post);
 });
 
 app.MapPost("/api/auth/login", async (LoginRequest request, AppDbContext db, TokenService tokens) =>
@@ -197,6 +231,43 @@ app.MapDelete("/api/admin/products/{id:int}", async (int id, AppDbContext db) =>
     return Results.NoContent();
 }).RequireAuthorization("Admin");
 
+app.MapGet("/api/admin/blog", async (AppDbContext db) => Results.Ok(await db.BlogPosts.AsNoTracking()
+    .OrderByDescending(x => x.UpdatedAt).ToListAsync())).RequireAuthorization("Admin");
+app.MapPost("/api/admin/blog", async (BlogPostRequest request, AppDbContext db) =>
+{
+    var validation = ValidateBlogPost(request);
+    if (validation is not null) return Results.BadRequest(new { message = validation });
+    if (await db.BlogPosts.AnyAsync(x => x.Slug == request.Slug.Trim()))
+        return Results.Conflict(new { message = "این نامک قبلاً استفاده شده است." });
+    var post = ApplyBlogPost(new BlogPost { CreatedAt = DateTime.UtcNow }, request);
+    db.BlogPosts.Add(post);
+    await db.SaveChangesAsync();
+    return Results.Created($"/api/blog/{post.Slug}", post);
+}).RequireAuthorization("Admin");
+app.MapPut("/api/admin/blog/{id:int}", async (int id, BlogPostRequest request, AppDbContext db) =>
+{
+    var validation = ValidateBlogPost(request);
+    if (validation is not null) return Results.BadRequest(new { message = validation });
+    var post = await db.BlogPosts.FindAsync(id);
+    if (post is null) return Results.NotFound();
+    var slug = request.Slug.Trim();
+    if (await db.BlogPosts.AnyAsync(x => x.Id != id && x.Slug == slug))
+        return Results.Conflict(new { message = "این نامک قبلاً استفاده شده است." });
+    ApplyBlogPost(post, request);
+    await db.SaveChangesAsync();
+    return Results.Ok(post);
+}).RequireAuthorization("Admin");
+app.MapDelete("/api/admin/blog/{id:int}", async (int id, AppDbContext db) =>
+{
+    var post = await db.BlogPosts.FindAsync(id);
+    if (post is null) return Results.NotFound();
+    db.BlogPosts.Remove(post);
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+}).RequireAuthorization("Admin");
+
+app.MapFallbackToFile("index.html");
+
 app.Run();
 
 static int UserId(ClaimsPrincipal principal) => int.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -210,6 +281,33 @@ static Product ApplyProduct(Product product, ProductRequest request)
     product.Description = request.Description.Trim(); product.Price = request.Price; product.ImageUrl = request.ImageUrl.Trim();
     product.Stock = request.Stock; product.Purity = request.Purity.Trim(); product.Weight = request.Weight.Trim(); product.Featured = request.Featured;
     return product;
+}
+static BlogPost ApplyBlogPost(BlogPost post, BlogPostRequest request)
+{
+    var now = DateTime.UtcNow;
+    post.Title = request.Title.Trim();
+    post.Slug = request.Slug.Trim().ToLowerInvariant();
+    post.Excerpt = request.Excerpt.Trim();
+    post.Content = request.Content.Trim();
+    post.CoverImageUrl = request.CoverImageUrl.Trim();
+    post.Category = request.Category.Trim();
+    post.Author = string.IsNullOrWhiteSpace(request.Author) ? "تحریریه مبین سیلور" : request.Author.Trim();
+    post.Tags = request.Tags.Trim();
+    post.ReadingMinutes = request.ReadingMinutes;
+    post.Featured = request.Featured;
+    post.IsPublished = request.IsPublished;
+    post.PublishedAt = request.IsPublished ? request.PublishedAt ?? post.PublishedAt ?? now : request.PublishedAt;
+    post.UpdatedAt = now;
+    return post;
+}
+static string? ValidateBlogPost(BlogPostRequest request)
+{
+    if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length < 5) return "عنوان مقاله باید دست‌کم ۵ نویسه باشد.";
+    if (string.IsNullOrWhiteSpace(request.Slug) || request.Slug.Any(ch => !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || char.IsDigit(ch) || ch == '-'))) return "نامک فقط می‌تواند شامل حروف انگلیسی، عدد و خط تیره باشد.";
+    if (string.IsNullOrWhiteSpace(request.Excerpt) || request.Excerpt.Trim().Length < 20) return "خلاصه مقاله باید دست‌کم ۲۰ نویسه باشد.";
+    if (string.IsNullOrWhiteSpace(request.Content) || request.Content.Trim().Length < 80) return "متن مقاله باید دست‌کم ۸۰ نویسه باشد.";
+    if (request.ReadingMinutes is < 1 or > 120) return "زمان مطالعه باید بین ۱ تا ۱۲۰ دقیقه باشد.";
+    return null;
 }
 static void SeedData(AppDbContext db)
 {
@@ -258,3 +356,5 @@ record CreateOrderItemRequest(int ProductId, int Quantity);
 record CreateOrderRequest(string CustomerName, string Phone, string Address, string PaymentMethod, List<CreateOrderItemRequest> Items);
 record UpdateStatusRequest(string Status);
 record ProductRequest(string Name, string Slug, string Category, string Description, decimal Price, string ImageUrl, int Stock, string Purity, string Weight, bool Featured);
+record BlogPostRequest(string Title, string Slug, string Excerpt, string Content, string CoverImageUrl, string Category,
+    string Author, string Tags, int ReadingMinutes, bool Featured, bool IsPublished, DateTime? PublishedAt);

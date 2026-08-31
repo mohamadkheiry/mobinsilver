@@ -67,3 +67,23 @@ export interface CustomerSummary {
   createdAt: string
   orders: number
 }
+
+export interface BlogPost {
+  id: number
+  title: string
+  slug: string
+  excerpt: string
+  content: string
+  coverImageUrl: string
+  category: string
+  author: string
+  tags: string
+  readingMinutes: number
+  featured: boolean
+  isPublished: boolean
+  publishedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type BlogPostPayload = Omit<BlogPost, 'id' | 'createdAt' | 'updatedAt'>
