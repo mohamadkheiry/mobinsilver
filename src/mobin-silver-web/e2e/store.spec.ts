@@ -13,7 +13,7 @@ test('storefront exposes the complete premium shopping shell', async ({ page }) 
 test('blog search, category filter and article table of contents work', async ({ page }) => {
   await page.goto('/blog')
   await expect(page.getByRole('heading', { level: 1, name: 'مجله مبین' })).toBeVisible()
-  await expect(page.locator('.blog-card')).toHaveCount(4)
+  await expect(page.locator('.blog-card')).toHaveCount(19)
 
   await page.getByPlaceholder('جستجو در مقاله‌ها...').fill('راهنمای تشخیص')
   await expect(page.locator('.blog-card')).toHaveCount(1)
@@ -42,7 +42,7 @@ test('admin can reach blog management and article editor', async ({ page }) => {
   await expect(page).toHaveURL(/\/admin$/)
   await page.getByRole('button', { name: 'مقالات' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'مدیریت مقالات' })).toBeVisible()
-  await expect(page.locator('.blog-admin-table tbody tr')).toHaveCount(5)
+  await expect(page.locator('.blog-admin-table tbody tr')).toHaveCount(20)
   await page.getByRole('button', { name: 'مقاله جدید' }).first().click()
   await expect(page.getByRole('heading', { name: 'مقاله جدید' })).toBeVisible()
   await expect(page.getByLabel('متن مقاله')).toBeVisible()

@@ -30,10 +30,9 @@ public static class BlogSeed
 
     public static void Seed(AppDbContext db)
     {
-        if (db.BlogPosts.Any()) return;
-
         var now = DateTime.UtcNow;
-        db.BlogPosts.AddRange(
+        var initialPosts = new[]
+        {
             Post(
                 "راهنمای تشخیص نقره اصل از بدل",
                 "how-to-identify-authentic-silver",
@@ -192,8 +191,15 @@ public static class BlogSeed
                 ## پاسخ کوتاه وجود ندارد
 
                 انتخاب بین طلا و نقره باید با بودجه، تحمل نوسان، افق زمانی و هدف شما هماهنگ باشد. ترکیب حساب‌شده هر دو فلز می‌تواند راهی برای تنوع‌بخشی باشد؛ تصمیم مالی نهایی را بر اساس شرایط شخصی و مشورت حرفه‌ای بگیرید.
-                "));
+                ")
+        };
 
+        var expectedPosts = initialPosts.Concat(BlogSeedArticles.Additional(now)).ToList();
+        var existingSlugs = db.BlogPosts.AsNoTracking().Select(post => post.Slug).ToHashSet();
+        var missingPosts = expectedPosts.Where(post => !existingSlugs.Contains(post.Slug)).ToList();
+        if (missingPosts.Count == 0) return;
+
+        db.BlogPosts.AddRange(missingPosts);
         db.SaveChanges();
     }
 
