@@ -1,4 +1,4 @@
-import type { AuthResponse, BlogPost, BlogPostPayload, CustomerSummary, DashboardStats, Order, Product, User } from '../types'
+import type { AuthResponse, BlogPost, BlogPostPayload, CustomerSummary, DashboardStats, Order, Product, StoreSettings, User } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -21,6 +21,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  storeSettings: () => request<StoreSettings>('/api/store/settings'),
+  subscribeNewsletter: (email: string) => request<{ message: string }>('/api/newsletter', {
+    method: 'POST', body: JSON.stringify({ email }),
+  }),
   products: (params = '') => request<Product[]>(`/api/products${params}`),
   product: (slug: string) => request<Product>(`/api/products/${slug}`),
   blogPosts: (params = '') => request<BlogPost[]>(`/api/blog${params}`),
@@ -33,7 +37,10 @@ export const api = {
   profile: () => request<User>('/api/account/profile'),
   updateProfile: (body: { fullName: string; phone: string; address: string }) =>
     request<{ message: string }>('/api/account/profile', { method: 'PUT', body: JSON.stringify(body) }),
+  changePassword: (body: { currentPassword: string; newPassword: string }) =>
+    request<{ message: string }>('/api/account/password', { method: 'PUT', body: JSON.stringify(body) }),
   myOrders: () => request<Order[]>('/api/account/orders'),
+  cancelOrder: (id: number) => request<Order>(`/api/account/orders/${id}/cancel`, { method: 'PATCH' }),
   createOrder: (body: { customerName: string; phone: string; address: string; paymentMethod: string; items: Array<{ productId: number; quantity: number }> }) =>
     request<{ id: number; orderNumber: string; total: number; status: string }>('/api/orders', { method: 'POST', body: JSON.stringify(body) }),
   adminStats: () => request<DashboardStats>('/api/admin/dashboard'),
@@ -57,4 +64,8 @@ export const api = {
     method: 'PUT', body: JSON.stringify(body),
   }),
   deleteBlogPost: (id: number) => request<void>(`/api/admin/blog/${id}`, { method: 'DELETE' }),
+  adminSettings: () => request<StoreSettings>('/api/admin/settings'),
+  updateSettings: (body: StoreSettings) => request<StoreSettings>('/api/admin/settings', {
+    method: 'PUT', body: JSON.stringify(body),
+  }),
 }

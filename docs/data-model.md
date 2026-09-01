@@ -75,6 +75,23 @@ erDiagram
         datetime CreatedAt
         datetime UpdatedAt
     }
+
+    STORE_SETTING {
+        int Id PK
+        string StoreName
+        string SupportPhone
+        string SupportEmail
+        string Address
+        string Announcement
+        bool OrdersEnabled
+        datetime UpdatedAt
+    }
+
+    NEWSLETTER_SUBSCRIPTION {
+        int Id PK
+        string Email UK
+        datetime CreatedAt
+    }
 ```
 
 ## 2. موجودیت‌ها
@@ -105,15 +122,26 @@ snapshot اطلاعات تحویل و پرداخت در لحظه سفارش را
 
 محتوای مجله را نگه می‌دارد. `Slug` یکتا و مبنای URL مقاله است. ترکیب `IsPublished` و `PublishedAt` تعیین می‌کند مقاله در API عمومی دیده شود یا به‌صورت پیش‌نویس/زمان‌بندی‌شده فقط در پنل مدیر باقی بماند. index ترکیبی روی این دو فیلد query انتشار را پشتیبانی می‌کند.
 
+### StoreSetting
+
+یک رکورد singleton برای نام فروشگاه، اطلاعات پشتیبانی، نشانی، اعلان بالای سایت و کلید عملیاتی `OrdersEnabled` است. endpoint عمومی فقط فیلدهای قابل‌نمایش را برمی‌گرداند و پنل Admin رکورد کامل را مدیریت می‌کند.
+
+### NewsletterSubscription
+
+ایمیل نرمال‌شده اعضای خبرنامه را نگه می‌دارد. index یکتای `Email` از عضویت تکراری جلوگیری می‌کند؛ ثبت دوباره از دید API idempotent است.
+
 ## 3. قواعد یکپارچگی فعلی
 
 - سفارش باید حداقل یک قلم داشته باشد؛ این قاعده در endpoint کنترل می‌شود.
 - Quantity باید حداقل یک و کمتر یا مساوی Stock باشد.
 - مبلغ نهایی از قیمت ذخیره‌شده در Product سمت سرور محاسبه می‌شود.
 - موجودی هنگام ایجاد سفارش کم می‌شود.
+- Quantityهای تکراری یک ProductId پیش از کنترل موجودی با هم جمع می‌شوند.
+- لغو سفارش در انتظار توسط مالک یا لغو توسط مدیر، موجودی اقلام را بازمی‌گرداند.
+- سفارش `لغو شده` terminal است و از طریق API مدیریت به وضعیت دیگر بازنمی‌گردد.
 - سفارش فقط به کاربر احرازشده تعلق می‌گیرد.
 - query سفارش مشتری با `UserId` claim محدود می‌شود.
-- index یکتا برای Username، Email، Slug محصول، Slug مقاله و OrderNumber وجود دارد.
+- index یکتا برای Username، Email کاربر، ایمیل خبرنامه، Slug محصول، Slug مقاله و OrderNumber وجود دارد.
 
 ## 4. وضعیت سفارش
 
@@ -126,7 +154,7 @@ snapshot اطلاعات تحویل و پرداخت در لحظه سفارش را
 - `تحویل شده`
 - `لغو شده`
 
-در نسخه آینده وضعیت باید enum یا lookup کنترل‌شده باشد و transition نامعتبر در domain service رد شود. اکنون endpoint مدیریت یک string دریافت می‌کند؛ این مورد در نقشه راه امنیت و صحت داده اولویت بالایی دارد.
+endpoint مدیریت فقط همین شش مقدار را می‌پذیرد و خروج از وضعیت `لغو شده` را رد می‌کند. تبدیل رشته به enum/lookup و اعمال کامل transitionهای مجاز مرحله بعدی تکامل domain است.
 
 ## 5. تراکنش و همزمانی
 

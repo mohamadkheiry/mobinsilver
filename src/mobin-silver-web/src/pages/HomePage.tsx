@@ -16,13 +16,14 @@ export function HomePage() {
   const [products, setProducts] = useState<Product[]>([])
   const [posts, setPosts] = useState<BlogPost[]>([])
   const [active, setActive] = useState('all')
-  useEffect(() => { Promise.all([api.products('?featured=true'), api.blogPosts()]).then(([nextProducts, nextPosts]) => { setProducts(nextProducts); setPosts(nextPosts) }).catch(() => { setProducts([]); setPosts([]) }) }, [])
+  const [loading, setLoading] = useState(true); const [error, setError] = useState('')
+  useEffect(() => { Promise.all([api.products('?featured=true'), api.blogPosts()]).then(([nextProducts, nextPosts]) => { setProducts(nextProducts); setPosts(nextPosts) }).catch(() => setError('در حال حاضر دریافت تازه‌ترین محصولات ممکن نیست.')).finally(() => setLoading(false)) }, [])
   const shown = active === 'all' ? products.slice(0, 4) : products.filter(x => x.category === active).slice(0, 4)
   return (
     <>
       <section className="hero">
         <div className="container hero__grid">
-          <div className="hero__copy"><span className="eyebrow">مبین سیلور • اصالت در هر انتخاب</span><h1>ارزش ماندگار،<br />درخشش اصیل</h1><p>گزیده‌ای از شمش‌های معتبر و زیورآلات نقره با ضمانت اصالت</p><div className="hero__actions"><Link className="button button--emerald" to="/shop">مشاهده محصولات</Link><Link className="button button--ghost-light" to="/guide">راهنمای خرید</Link></div></div>
+          <div className="hero__copy"><h1>ارزش ماندگار،<br />درخشش اصیل</h1><p>گزیده‌ای از شمش‌های معتبر و زیورآلات نقره با ضمانت اصالت و کیفیت.</p><div className="hero__actions"><Link className="button button--emerald" to="/shop">مشاهده محصولات</Link><Link className="button button--ghost-light" to="/guide">راهنمای خرید</Link></div></div>
           <div className="hero__media"><img src="/assets/hero-products.png" alt="شمش نقره، شمش طلا و زیورآلات نقره مبین سیلور" /></div>
         </div>
       </section>
@@ -36,7 +37,7 @@ export function HomePage() {
           <div className="category-tabs" role="tablist">{[
             ['all', 'همه'], ['silver-bar', 'شمش نقره'], ['silver-jewelry', 'زیورآلات'], ['gold-bar', 'شمش طلا']
           ].map(([key, label]) => <button role="tab" aria-selected={active === key} className={active === key ? 'active' : ''} onClick={() => setActive(key)} key={key}>{label}</button>)}</div>
-          <div className="product-rail">{shown.length ? shown.map(product => <ProductCard product={product} key={product.id} />) : <div className="loading-line">در حال دریافت محصولات...</div>}</div>
+          <div className="product-rail">{shown.length ? shown.map(product => <ProductCard product={product} key={product.id} />) : <div className="loading-line" role="status">{loading ? 'در حال دریافت محصولات...' : error || 'محصولی در این دسته موجود نیست.'}</div>}</div>
           <div className="center-action"><Link className="text-link" to="/shop">مشاهده همه محصولات <ArrowLeft /></Link></div>
         </div>
       </section>

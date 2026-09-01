@@ -1,9 +1,11 @@
 using System.Security.Claims;
 using System.Text;
+using System.Net.Mail;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Caching.Memory;
 using MobinSilver.Api.Data;
 using MobinSilver.Api.Models;
 using MobinSilver.Api.Services;
@@ -13,6 +15,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("Default")));
 builder.Services.AddScoped<TokenService>();
+builder.Services.AddMemoryCache();
 builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
     policy.WithOrigins("http://localhost:5173", "http://127.0.0.1:5173", "https://mobinsilver.00f.ir", "http://mobinsilver.00f.ir")
         .AllowAnyHeader().AllowAnyMethod()));
@@ -56,11 +59,29 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
     BlogSeed.EnsureSchema(db);
+    StoreSchema.Ensure(db);
     SeedData(db);
     BlogSeed.Seed(db);
 }
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", service = "MobinSilver.Api" }));
+
+app.MapGet("/api/store/settings", async (AppDbContext db) =>
+{
+    var setting = await db.StoreSettings.AsNoTracking().OrderBy(x => x.Id).FirstAsync();
+    return Results.Ok(new { setting.StoreName, setting.SupportPhone, setting.SupportEmail, setting.Address, setting.Announcement, setting.OrdersEnabled });
+});
+
+app.MapPost("/api/newsletter", async (NewsletterRequest request, AppDbContext db) =>
+{
+    if (!IsValidEmail(request.Email)) return Results.BadRequest(new { message = "لطفاً یک ایمیل معتبر وارد کنید." });
+    var email = request.Email.Trim().ToLowerInvariant();
+    if (await db.NewsletterSubscriptions.AnyAsync(x => x.Email == email))
+        return Results.Ok(new { message = "این ایمیل قبلاً عضو خبرنامه شده است." });
+    db.NewsletterSubscriptions.Add(new NewsletterSubscription { Email = email });
+    await db.SaveChangesAsync();
+    return Results.Ok(new { message = "عضویت شما در خبرنامه ثبت شد." });
+});
 
 app.MapGet("/api/products", async (AppDbContext db, string? category, string? search, bool? featured) =>
 {
@@ -99,17 +120,33 @@ app.MapGet("/api/blog/{slug}", async (AppDbContext db, string slug) =>
     return post is null ? Results.NotFound(new { message = "مقاله موردنظر پیدا نشد." }) : Results.Ok(post);
 });
 
-app.MapPost("/api/auth/login", async (LoginRequest request, AppDbContext db, TokenService tokens) =>
+app.MapPost("/api/auth/login", async (LoginRequest request, AppDbContext db, TokenService tokens, HttpContext httpContext, IMemoryCache cache) =>
 {
+    if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
+        return Results.BadRequest(new { message = "نام کاربری و رمز عبور الزامی است." });
     var login = request.Username.Trim().ToLowerInvariant();
+    var client = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    var throttleKey = $"login:{client}:{login}";
+    var failures = cache.Get<int>(throttleKey);
+    if (failures >= 5)
+        return Results.Json(new { message = "تلاش‌های ناموفق بیش از حد مجاز است. ۱۵ دقیقه دیگر دوباره امتحان کنید." }, statusCode: 429);
     var user = await db.Users.FirstOrDefaultAsync(x => x.Username.ToLower() == login || x.Email.ToLower() == login);
     if (user is null || !PasswordService.Verify(request.Password, user.PasswordHash, user.PasswordSalt))
+    {
+        cache.Set(throttleKey, failures + 1, TimeSpan.FromMinutes(15));
         return Results.Json(new { message = "نام کاربری یا رمز عبور صحیح نیست." }, statusCode: 401);
+    }
+    cache.Remove(throttleKey);
     return Results.Ok(ToAuthResponse(user, tokens.Create(user)));
 });
 
 app.MapPost("/api/auth/register", async (RegisterRequest request, AppDbContext db, TokenService tokens) =>
 {
+    if (string.IsNullOrWhiteSpace(request.FullName) || request.FullName.Trim().Length < 3) return Results.BadRequest(new { message = "نام و نام خانوادگی باید دست‌کم ۳ نویسه باشد." });
+    if (!IsValidEmail(request.Email)) return Results.BadRequest(new { message = "ایمیل واردشده معتبر نیست." });
+    if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8) return Results.BadRequest(new { message = "رمز عبور باید دست‌کم ۸ نویسه باشد." });
+    if (!string.IsNullOrWhiteSpace(request.Phone) && !IsValidIranianPhone(request.Phone))
+        return Results.BadRequest(new { message = "شماره موبایل معتبر نیست." });
     var username = request.Email.Trim().ToLowerInvariant();
     if (await db.Users.AnyAsync(x => x.Email == username || x.Username == username))
         return Results.BadRequest(new { message = "این ایمیل قبلاً ثبت شده است." });
@@ -132,6 +169,9 @@ app.MapGet("/api/account/profile", async (ClaimsPrincipal principal, AppDbContex
 }).RequireAuthorization();
 app.MapPut("/api/account/profile", async (ProfileRequest request, ClaimsPrincipal principal, AppDbContext db) =>
 {
+    if (string.IsNullOrWhiteSpace(request.FullName) || request.FullName.Trim().Length < 3) return Results.BadRequest(new { message = "نام و نام خانوادگی معتبر نیست." });
+    if (!IsValidIranianPhone(request.Phone)) return Results.BadRequest(new { message = "شماره موبایل معتبر نیست." });
+    if (string.IsNullOrWhiteSpace(request.Address) || request.Address.Trim().Length < 10) return Results.BadRequest(new { message = "نشانی کامل را وارد کنید." });
     var uid = UserId(principal);
     var user = await db.Users.FirstAsync(x => x.Id == uid);
     user.FullName = request.FullName.Trim();
@@ -139,6 +179,20 @@ app.MapPut("/api/account/profile", async (ProfileRequest request, ClaimsPrincipa
     user.Address = request.Address.Trim();
     await db.SaveChangesAsync();
     return Results.Ok(new { message = "اطلاعات حساب ذخیره شد." });
+}).RequireAuthorization();
+app.MapPut("/api/account/password", async (ChangePasswordRequest request, ClaimsPrincipal principal, AppDbContext db) =>
+{
+    if (string.IsNullOrWhiteSpace(request.CurrentPassword) || string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < 8)
+        return Results.BadRequest(new { message = "رمز فعلی و رمز جدیدِ حداقل ۸ نویسه‌ای الزامی است." });
+    var uid = UserId(principal);
+    var user = await db.Users.FirstAsync(x => x.Id == uid);
+    if (!PasswordService.Verify(request.CurrentPassword, user.PasswordHash, user.PasswordSalt))
+        return Results.BadRequest(new { message = "رمز عبور فعلی صحیح نیست." });
+    var (hash, salt) = PasswordService.Hash(request.NewPassword);
+    user.PasswordHash = hash;
+    user.PasswordSalt = salt;
+    await db.SaveChangesAsync();
+    return Results.Ok(new { message = "رمز عبور با موفقیت تغییر کرد." });
 }).RequireAuthorization();
 app.MapGet("/api/account/orders", async (ClaimsPrincipal principal, AppDbContext db) =>
 {
@@ -150,16 +204,23 @@ app.MapGet("/api/account/orders", async (ClaimsPrincipal principal, AppDbContext
 
 app.MapPost("/api/orders", async (CreateOrderRequest request, ClaimsPrincipal principal, AppDbContext db) =>
 {
-    if (request.Items.Count == 0) return Results.BadRequest(new { message = "سبد خرید خالی است." });
+    var storeSetting = await db.StoreSettings.AsNoTracking().OrderBy(x => x.Id).FirstAsync();
+    if (!storeSetting.OrdersEnabled) return Results.BadRequest(new { message = "ثبت سفارش موقتاً غیرفعال است. لطفاً با پشتیبانی تماس بگیرید." });
+    if (request.Items is null || request.Items.Count == 0) return Results.BadRequest(new { message = "سبد خرید خالی است." });
+    if (string.IsNullOrWhiteSpace(request.CustomerName) || request.CustomerName.Trim().Length < 3 || !IsValidIranianPhone(request.Phone) || string.IsNullOrWhiteSpace(request.Address) || request.Address.Trim().Length < 10)
+        return Results.BadRequest(new { message = "اطلاعات تحویل‌گیرنده کامل یا معتبر نیست." });
+    if (request.PaymentMethod != "پرداخت پس از تأیید کارشناس")
+        return Results.BadRequest(new { message = "روش پرداخت انتخاب‌شده معتبر نیست." });
     var productIds = request.Items.Select(x => x.ProductId).Distinct().ToList();
     var products = await db.Products.Where(x => productIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id);
     if (products.Count != productIds.Count) return Results.BadRequest(new { message = "یکی از محصولات معتبر نیست." });
-    if (request.Items.Any(x => x.Quantity < 1 || products[x.ProductId].Stock < x.Quantity))
+    var requestedQuantities = request.Items.GroupBy(x => x.ProductId).ToDictionary(group => group.Key, group => group.Sum(x => x.Quantity));
+    if (request.Items.Any(x => x.Quantity < 1) || requestedQuantities.Any(x => products[x.Key].Stock < x.Value))
         return Results.BadRequest(new { message = "موجودی یکی از محصولات کافی نیست." });
     var order = new Order
     {
         UserId = UserId(principal),
-        OrderNumber = $"MS-{DateTime.UtcNow:yyMMdd}-{Random.Shared.Next(1000, 9999)}",
+        OrderNumber = $"MS-{DateTime.UtcNow:yyMMdd}-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}",
         CustomerName = request.CustomerName.Trim(), Phone = request.Phone.Trim(), Address = request.Address.Trim(),
         PaymentMethod = request.PaymentMethod, Status = "در انتظار بررسی", CreatedAt = DateTime.UtcNow
     };
@@ -173,6 +234,22 @@ app.MapPost("/api/orders", async (CreateOrderRequest request, ClaimsPrincipal pr
     db.Orders.Add(order);
     await db.SaveChangesAsync();
     return Results.Ok(new { order.Id, order.OrderNumber, order.Total, order.Status });
+}).RequireAuthorization();
+
+app.MapMethods("/api/account/orders/{id:int}/cancel", new[] { "PATCH" }, async (int id, ClaimsPrincipal principal, AppDbContext db) =>
+{
+    var uid = UserId(principal);
+    var order = await db.Orders.Include(x => x.Items).FirstOrDefaultAsync(x => x.Id == id && x.UserId == uid);
+    if (order is null) return Results.NotFound(new { message = "سفارش پیدا نشد." });
+    if (order.Status != "در انتظار بررسی")
+        return Results.BadRequest(new { message = "این سفارش دیگر قابل لغو نیست." });
+    var productIds = order.Items.Select(x => x.ProductId).ToList();
+    var products = await db.Products.Where(x => productIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id);
+    foreach (var item in order.Items)
+        if (products.TryGetValue(item.ProductId, out var product)) product.Stock += item.Quantity;
+    order.Status = "لغو شده";
+    await db.SaveChangesAsync();
+    return Results.Ok(order);
 }).RequireAuthorization();
 
 app.MapGet("/api/admin/dashboard", async (AppDbContext db) =>
@@ -199,9 +276,21 @@ app.MapGet("/api/admin/orders", async (AppDbContext db) => Results.Ok(await db.O
     .OrderByDescending(x => x.CreatedAt).ToListAsync())).RequireAuthorization("Admin");
 app.MapMethods("/api/admin/orders/{id:int}/status", new[] { "PATCH" }, async (int id, UpdateStatusRequest request, AppDbContext db) =>
 {
-    var order = await db.Orders.FindAsync(id);
+    var allowed = new[] { "در انتظار بررسی", "پرداخت شده", "در حال آماده‌سازی", "ارسال شده", "تحویل شده", "لغو شده" };
+    if (string.IsNullOrWhiteSpace(request.Status) || !allowed.Contains(request.Status.Trim())) return Results.BadRequest(new { message = "وضعیت سفارش معتبر نیست." });
+    var order = await db.Orders.Include(x => x.Items).FirstOrDefaultAsync(x => x.Id == id);
     if (order is null) return Results.NotFound();
-    order.Status = request.Status.Trim();
+    var nextStatus = request.Status.Trim();
+    if (order.Status == "لغو شده" && nextStatus != order.Status)
+        return Results.BadRequest(new { message = "سفارش لغوشده قابل بازگردانی نیست." });
+    if (order.Status != "لغو شده" && nextStatus == "لغو شده")
+    {
+        var productIds = order.Items.Select(x => x.ProductId).ToList();
+        var products = await db.Products.Where(x => productIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id);
+        foreach (var item in order.Items)
+            if (products.TryGetValue(item.ProductId, out var product)) product.Stock += item.Quantity;
+    }
+    order.Status = nextStatus;
     await db.SaveChangesAsync();
     return Results.Ok(order);
 }).RequireAuthorization("Admin");
@@ -209,6 +298,10 @@ app.MapGet("/api/admin/customers", async (AppDbContext db) => Results.Ok(await d
     .Select(x => new { x.Id, x.FullName, x.Email, x.Phone, x.CreatedAt, Orders = x.Orders.Count }).ToListAsync())).RequireAuthorization("Admin");
 app.MapPost("/api/admin/products", async (ProductRequest request, AppDbContext db) =>
 {
+    var validation = ValidateProduct(request);
+    if (validation is not null) return Results.BadRequest(new { message = validation });
+    var slug = request.Slug.Trim().ToLowerInvariant();
+    if (await db.Products.AnyAsync(x => x.Slug == slug)) return Results.Conflict(new { message = "این نامک محصول قبلاً استفاده شده است." });
     var product = ApplyProduct(new Product { CreatedAt = DateTime.UtcNow }, request);
     db.Products.Add(product);
     await db.SaveChangesAsync();
@@ -216,8 +309,12 @@ app.MapPost("/api/admin/products", async (ProductRequest request, AppDbContext d
 }).RequireAuthorization("Admin");
 app.MapPut("/api/admin/products/{id:int}", async (int id, ProductRequest request, AppDbContext db) =>
 {
+    var validation = ValidateProduct(request);
+    if (validation is not null) return Results.BadRequest(new { message = validation });
     var product = await db.Products.FindAsync(id);
     if (product is null) return Results.NotFound();
+    var slug = request.Slug.Trim().ToLowerInvariant();
+    if (await db.Products.AnyAsync(x => x.Id != id && x.Slug == slug)) return Results.Conflict(new { message = "این نامک محصول قبلاً استفاده شده است." });
     ApplyProduct(product, request);
     await db.SaveChangesAsync();
     return Results.Ok(product);
@@ -226,9 +323,29 @@ app.MapDelete("/api/admin/products/{id:int}", async (int id, AppDbContext db) =>
 {
     var product = await db.Products.FindAsync(id);
     if (product is null) return Results.NotFound();
+    if (await db.OrderItems.AnyAsync(x => x.ProductId == id))
+        return Results.Conflict(new { message = "این محصول سابقه سفارش دارد و قابل حذف نیست؛ موجودی آن را صفر کنید." });
     db.Products.Remove(product);
     await db.SaveChangesAsync();
     return Results.NoContent();
+}).RequireAuthorization("Admin");
+
+app.MapGet("/api/admin/settings", async (AppDbContext db) =>
+    Results.Ok(await db.StoreSettings.AsNoTracking().OrderBy(x => x.Id).FirstAsync())).RequireAuthorization("Admin");
+app.MapPut("/api/admin/settings", async (StoreSettingRequest request, AppDbContext db) =>
+{
+    if (string.IsNullOrWhiteSpace(request.StoreName) || request.StoreName.Trim().Length < 3 || !IsValidEmail(request.SupportEmail) || string.IsNullOrWhiteSpace(request.SupportPhone) || request.SupportPhone.Trim().Length < 7 || string.IsNullOrWhiteSpace(request.Address) || request.Address.Trim().Length < 5 || string.IsNullOrWhiteSpace(request.Announcement) || request.Announcement.Trim().Length < 10)
+        return Results.BadRequest(new { message = "اطلاعات تنظیمات فروشگاه کامل یا معتبر نیست." });
+    var setting = await db.StoreSettings.OrderBy(x => x.Id).FirstAsync();
+    setting.StoreName = request.StoreName.Trim();
+    setting.SupportPhone = request.SupportPhone.Trim();
+    setting.SupportEmail = request.SupportEmail.Trim().ToLowerInvariant();
+    setting.Address = request.Address.Trim();
+    setting.Announcement = request.Announcement.Trim();
+    setting.OrdersEnabled = request.OrdersEnabled;
+    setting.UpdatedAt = DateTime.UtcNow;
+    await db.SaveChangesAsync();
+    return Results.Ok(setting);
 }).RequireAuthorization("Admin");
 
 app.MapGet("/api/admin/blog", async (AppDbContext db) => Results.Ok(await db.BlogPosts.AsNoTracking()
@@ -277,10 +394,22 @@ static object ToAuthResponse(AppUser user, string token) => new
 };
 static Product ApplyProduct(Product product, ProductRequest request)
 {
-    product.Name = request.Name.Trim(); product.Slug = request.Slug.Trim(); product.Category = request.Category.Trim();
+    product.Name = request.Name.Trim(); product.Slug = request.Slug.Trim().ToLowerInvariant(); product.Category = request.Category.Trim();
     product.Description = request.Description.Trim(); product.Price = request.Price; product.ImageUrl = request.ImageUrl.Trim();
     product.Stock = request.Stock; product.Purity = request.Purity.Trim(); product.Weight = request.Weight.Trim(); product.Featured = request.Featured;
     return product;
+}
+static string? ValidateProduct(ProductRequest request)
+{
+    if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length < 3) return "نام محصول باید دست‌کم ۳ نویسه باشد.";
+    if (string.IsNullOrWhiteSpace(request.Slug) || request.Slug.Any(ch => !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || char.IsDigit(ch) || ch == '-'))) return "نامک فقط می‌تواند شامل حروف انگلیسی، عدد و خط تیره باشد.";
+    if (request.Category is not ("silver-bar" or "silver-jewelry" or "gold-bar")) return "دسته‌بندی محصول معتبر نیست.";
+    if (string.IsNullOrWhiteSpace(request.Description) || request.Description.Trim().Length < 10) return "توضیحات محصول باید دست‌کم ۱۰ نویسه باشد.";
+    if (request.Price <= 0) return "قیمت محصول باید بیشتر از صفر باشد.";
+    if (request.Stock < 0) return "موجودی نمی‌تواند منفی باشد.";
+    if (string.IsNullOrWhiteSpace(request.ImageUrl) || !request.ImageUrl.StartsWith('/')) return "مسیر تصویر محصول معتبر نیست.";
+    if (string.IsNullOrWhiteSpace(request.Purity) || string.IsNullOrWhiteSpace(request.Weight)) return "عیار و وزن محصول الزامی است.";
+    return null;
 }
 static BlogPost ApplyBlogPost(BlogPost post, BlogPostRequest request)
 {
@@ -292,7 +421,7 @@ static BlogPost ApplyBlogPost(BlogPost post, BlogPostRequest request)
     post.CoverImageUrl = request.CoverImageUrl.Trim();
     post.Category = request.Category.Trim();
     post.Author = string.IsNullOrWhiteSpace(request.Author) ? "تحریریه مبین سیلور" : request.Author.Trim();
-    post.Tags = request.Tags.Trim();
+    post.Tags = request.Tags?.Trim() ?? string.Empty;
     post.ReadingMinutes = request.ReadingMinutes;
     post.Featured = request.Featured;
     post.IsPublished = request.IsPublished;
@@ -306,8 +435,22 @@ static string? ValidateBlogPost(BlogPostRequest request)
     if (string.IsNullOrWhiteSpace(request.Slug) || request.Slug.Any(ch => !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || char.IsDigit(ch) || ch == '-'))) return "نامک فقط می‌تواند شامل حروف انگلیسی، عدد و خط تیره باشد.";
     if (string.IsNullOrWhiteSpace(request.Excerpt) || request.Excerpt.Trim().Length < 20) return "خلاصه مقاله باید دست‌کم ۲۰ نویسه باشد.";
     if (string.IsNullOrWhiteSpace(request.Content) || request.Content.Trim().Length < 80) return "متن مقاله باید دست‌کم ۸۰ نویسه باشد.";
+    if (string.IsNullOrWhiteSpace(request.CoverImageUrl) || !request.CoverImageUrl.StartsWith('/')) return "مسیر تصویر مقاله معتبر نیست.";
+    if (string.IsNullOrWhiteSpace(request.Category)) return "دسته‌بندی مقاله الزامی است.";
     if (request.ReadingMinutes is < 1 or > 120) return "زمان مطالعه باید بین ۱ تا ۱۲۰ دقیقه باشد.";
     return null;
+}
+static bool IsValidEmail(string? value)
+{
+    if (string.IsNullOrWhiteSpace(value)) return false;
+    try { return new MailAddress(value.Trim()).Address == value.Trim(); }
+    catch { return false; }
+}
+static bool IsValidIranianPhone(string? value)
+{
+    if (string.IsNullOrWhiteSpace(value)) return false;
+    var normalized = value.Trim().Replace(" ", "").Replace("-", "");
+    return normalized.Length == 11 && normalized.StartsWith("09") && normalized.All(char.IsDigit);
 }
 static void SeedData(AppDbContext db)
 {
@@ -352,9 +495,12 @@ static void SeedData(AppDbContext db)
 record LoginRequest(string Username, string Password);
 record RegisterRequest(string FullName, string Email, string Password, string? Phone);
 record ProfileRequest(string FullName, string Phone, string Address);
+record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+record NewsletterRequest(string Email);
 record CreateOrderItemRequest(int ProductId, int Quantity);
 record CreateOrderRequest(string CustomerName, string Phone, string Address, string PaymentMethod, List<CreateOrderItemRequest> Items);
 record UpdateStatusRequest(string Status);
 record ProductRequest(string Name, string Slug, string Category, string Description, decimal Price, string ImageUrl, int Stock, string Purity, string Weight, bool Featured);
+record StoreSettingRequest(string StoreName, string SupportPhone, string SupportEmail, string Address, string Announcement, bool OrdersEnabled);
 record BlogPostRequest(string Title, string Slug, string Excerpt, string Content, string CoverImageUrl, string Category,
     string Author, string Tags, int ReadingMinutes, bool Featured, bool IsPublished, DateTime? PublishedAt);

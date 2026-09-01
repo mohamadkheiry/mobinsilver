@@ -12,6 +12,8 @@ public class AppDbContext : DbContext
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<BlogPost> BlogPosts => Set<BlogPost>();
+    public DbSet<StoreSetting> StoreSettings => Set<StoreSetting>();
+    public DbSet<NewsletterSubscription> NewsletterSubscriptions => Set<NewsletterSubscription>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -21,6 +23,7 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Order>().HasIndex(x => x.OrderNumber).IsUnique();
         modelBuilder.Entity<BlogPost>().HasIndex(x => x.Slug).IsUnique();
         modelBuilder.Entity<BlogPost>().HasIndex(x => new { x.IsPublished, x.PublishedAt });
+        modelBuilder.Entity<NewsletterSubscription>().HasIndex(x => x.Email).IsUnique();
         modelBuilder.Entity<Product>().Property(x => x.Price).HasPrecision(18, 0);
         modelBuilder.Entity<Order>().Property(x => x.Total).HasPrecision(18, 0);
         modelBuilder.Entity<OrderItem>().Property(x => x.UnitPrice).HasPrecision(18, 0);

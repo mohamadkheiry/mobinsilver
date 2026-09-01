@@ -7,7 +7,7 @@
 - اتصال درگاه پرداخت sandbox و سپس production با verify، webhook و idempotency
 - مدل `Payment`، reconciliation و refund کنترل‌شده
 - اعتبارسنجی جامع ورودی با پیام استاندارد
-- rate limiting، lockout و MFA مدیر
+- توسعه limiter فعلی login به rate limiting توزیع‌شده، lockout حساب‌محور و MFA مدیر
 - حذف/تغییر اجباری credentialهای seed
 - Secret Manager و rotation کلیدها
 - HTTPS، headerهای امنیتی و CORS production
@@ -28,7 +28,7 @@
 - pagination، filter و export امن پنل مدیر
 - آپلود تصویر امن با object storage و CDN
 - مدیریت چند نشانی مشتری
-- فراموشی رمز و تأیید ایمیل/تلفن
+- فراموشی رمز و تأیید ایمیل/تلفن؛ تغییر رمز برای کاربر واردشده اکنون موجود است
 - soft delete محصولات و archive سفارش
 - دسترس‌پذیری WCAG AA
 
@@ -65,4 +65,3 @@
 - migration و rollback مشخص است
 - مستند توسعه، API و عملیات به‌روز شده است
 - مالک پشتیبانی و runbook تعیین شده است
-

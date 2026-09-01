@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { api } from '../lib/api'
 import type { User } from '../types'
 
@@ -20,6 +20,15 @@ function storedUser(): User | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(storedUser)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!localStorage.getItem('mobin-silver-token')) return
+    api.profile().then(nextUser => {
+      localStorage.setItem('mobin-silver-user', JSON.stringify(nextUser)); setUser(nextUser)
+    }).catch(() => {
+      localStorage.removeItem('mobin-silver-token'); localStorage.removeItem('mobin-silver-user'); setUser(null)
+    })
+  }, [])
 
   const save = useCallback((nextUser: User, token: string) => {
     localStorage.setItem('mobin-silver-token', token)

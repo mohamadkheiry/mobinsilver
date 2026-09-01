@@ -83,3 +83,22 @@ public class BlogPost
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
+
+public class StoreSetting
+{
+    public int Id { get; set; }
+    public string StoreName { get; set; } = "مبین سیلور";
+    public string SupportPhone { get; set; } = "۰۲۱-۹۱۰۰۰۰۰۰";
+    public string SupportEmail { get; set; } = "info@mobinsilver.ir";
+    public string Address { get; set; } = "تهران، خیابان ولیعصر";
+    public string Announcement { get; set; } = "بسم الله الرحمن الرحیم • إِنَّا فَتَحْنَا لَكَ فَتْحًا مُبِينًا";
+    public bool OrdersEnabled { get; set; } = true;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class NewsletterSubscription
+{
+    public int Id { get; set; }
+    public string Email { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}

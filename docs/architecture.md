@@ -28,7 +28,7 @@ flowchart TB
     subgraph System[Mobin Silver]
         Web[React SPA\nTypeScript + Vite]
         Api[ASP.NET Core Minimal API\nJWT + Business Rules]
-        Db[(SQLite\nUsers Products Orders OrderItems)]
+        Db[(SQLite\nUsers Products Orders OrderItems\nBlogPosts StoreSettings Newsletter)]
         Assets[Static Product Assets]
     end
 
@@ -70,6 +70,7 @@ flowchart TB
     Router --> Admin[Protected Admin Dashboard]
     Public --> Cart[Cart Context]
     Public --> Favorite[Favorites Context]
+    Public --> Store[Store Settings Context]
     Customer --> Auth[Auth Context]
     Admin --> Auth
     Auth --> Client[API Client]
@@ -80,6 +81,8 @@ flowchart TB
 
 - Auth token در نسخه فعلی در `localStorage` قرار می‌گیرد.
 - سبد و علاقه‌مندی‌ها برای تجربه سریع در مرورگر پایدار می‌شوند.
+- تنظیمات عمومی فروشگاه از API بارگذاری و در `StoreContext` بین هدر و footer مشترک می‌شوند.
+- صفحه‌های route-level به‌صورت lazy chunk بارگذاری می‌شوند تا باندل اولیه کوچک بماند.
 - `ProtectedRoute` نقش و ورود را قبل از نمایش dashboard کنترل می‌کند؛ کنترل اصلی امنیت همچنان در API است.
 - CSS اختصاصی تمام layoutهای RTL و breakpointها را مدیریت می‌کند.
 
@@ -115,7 +118,7 @@ sequenceDiagram
 - نقش ارسال‌شده از frontend معتبر نیست؛ role از claim امضاشده و policy سرور خوانده می‌شود.
 - مسیرهای `/api/admin/*` به policy `Admin` نیاز دارند.
 - داده شخصی، token و secret نباید در log یا repository ثبت شوند.
-- reverse proxy مرز TLS، rate limiting، headerهای امنیتی و محدودسازی اندازه درخواست است.
+- API ورود limiter حافظه‌ای IP + نام کاربری دارد؛ reverse proxy همچنان مرز rate limit سراسری، TLS، headerهای امنیتی و محدودسازی اندازه درخواست است.
 - سرویس پرداخت آینده باید webhook امضاشده، idempotency و تطبیق مبلغ سمت سرور داشته باشد.
 
 ## 8. ویژگی‌های کیفیتی
@@ -123,7 +126,7 @@ sequenceDiagram
 | ویژگی | وضعیت فعلی | مسیر رشد |
 |---|---|---|
 | قابلیت استفاده | RTL، responsive، فونت محلی | تست دسترس‌پذیری خودکار |
-| امنیت | JWT، PBKDF2، role policy | HttpOnly cookie/refresh، rate limit، MFA ادمین |
+| امنیت | JWT، PBKDF2، role policy، login throttle | HttpOnly cookie/refresh، limiter توزیع‌شده، MFA ادمین |
 | کارایی | SPA و queryهای AsNoTracking | pagination، caching، CDN، image optimization |
 | پایداری | SQLite تک‌نمونه | PostgreSQL/SQL Server، migration و HA |
 | مشاهده‌پذیری | logging پایه ASP.NET | structured logs، tracing، metrics و alerts |
@@ -170,4 +173,3 @@ flowchart LR
 ```
 
 این نمودار هدف آینده است و همه اجزای آن در نسخه جاری پیاده نشده‌اند.
-

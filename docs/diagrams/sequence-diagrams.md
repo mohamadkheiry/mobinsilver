@@ -24,7 +24,12 @@ sequenceDiagram
         A-->>W: 200 token + user
         W->>W: ذخیره نشست و redirect با role
     else نامعتبر
-        A-->>W: 401 پیام عمومی
+        A->>A: افزایش شمارنده IP + username
+        alt پنج شکست قبلی
+            A-->>W: 429 محدودسازی ۱۵ دقیقه
+        else زیر آستانه
+            A-->>W: 401 پیام عمومی
+        end
         W-->>U: نمایش خطای ورود
     end
 ```
@@ -128,9 +133,13 @@ sequenceDiagram
     J->>J: validate token and Admin role
     alt role مجاز
         J->>A: id + status
-        A->>D: Find Order
+        A->>D: Find Order + Items
         alt سفارش موجود
             D-->>A: Order
+            A->>A: whitelist و terminal guard
+            opt وضعیت جدید لغو شده است
+                A->>D: Restore Product Stock
+            end
             A->>D: Update Status
             D-->>A: commit
             A-->>W: 200 Order
@@ -231,4 +240,3 @@ sequenceDiagram
     D-->>A: price metadata
     A-->>W: price + lastUpdatedAt
 ```
-

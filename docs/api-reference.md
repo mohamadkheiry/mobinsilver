@@ -12,6 +12,8 @@ Content-Type: application/json
 | Method | Path | دسترسی | کاربرد |
 |---|---|---|---|
 | GET | `/api/health` | عمومی | سلامت سرویس |
+| GET | `/api/store/settings` | عمومی | تنظیمات قابل‌نمایش فروشگاه |
+| POST | `/api/newsletter` | عمومی | عضویت در خبرنامه |
 | GET | `/api/products` | عمومی | فهرست و فیلتر محصولات |
 | GET | `/api/products/{slug}` | عمومی | جزئیات محصول |
 | GET | `/api/blog` | عمومی | فهرست مقاله‌های منتشرشده |
@@ -20,7 +22,9 @@ Content-Type: application/json
 | POST | `/api/auth/register` | عمومی | ثبت‌نام مشتری |
 | GET | `/api/account/profile` | احرازشده | پروفایل جاری |
 | PUT | `/api/account/profile` | احرازشده | ویرایش پروفایل |
+| PUT | `/api/account/password` | احرازشده | تغییر رمز عبور |
 | GET | `/api/account/orders` | احرازشده | سفارش‌های کاربر جاری |
+| PATCH | `/api/account/orders/{id}/cancel` | احرازشده | لغو سفارشِ در انتظار کاربر جاری |
 | POST | `/api/orders` | احرازشده | ثبت سفارش |
 | GET | `/api/admin/dashboard` | Admin | آمار داشبورد |
 | GET | `/api/admin/orders` | Admin | تمام سفارش‌ها |
@@ -29,6 +33,8 @@ Content-Type: application/json
 | POST | `/api/admin/products` | Admin | ایجاد محصول |
 | PUT | `/api/admin/products/{id}` | Admin | ویرایش محصول |
 | DELETE | `/api/admin/products/{id}` | Admin | حذف محصول |
+| GET | `/api/admin/settings` | Admin | دریافت تنظیمات کامل فروشگاه |
+| PUT | `/api/admin/settings` | Admin | ذخیره تنظیمات فروشگاه |
 | GET | `/api/admin/blog` | Admin | تمام مقاله‌ها و پیش‌نویس‌ها |
 | POST | `/api/admin/blog` | Admin | ایجاد مقاله |
 | PUT | `/api/admin/blog/{id}` | Admin | ویرایش مقاله |
@@ -87,6 +93,20 @@ GET /api/products?category=silver-bar&featured=true
   "createdAt": "2026-08-27T00:00:00Z"
 }
 ```
+
+## تنظیمات عمومی و خبرنامه
+
+### `GET /api/store/settings`
+
+فقط فیلدهای عمومی `storeName`، `supportPhone`، `supportEmail`، `address`، `announcement` و `ordersEnabled` را برمی‌گرداند؛ شناسه داخلی و زمان ویرایش افشا نمی‌شوند.
+
+### `POST /api/newsletter`
+
+```json
+{ "email": "customer@example.com" }
+```
+
+ایمیل نامعتبر `400` است. ثبت دوباره همان ایمیل idempotent است و پاسخ موفق می‌گیرد، اما رکورد تکراری ایجاد نمی‌شود.
 
 ## 4. مجله
 
@@ -153,7 +173,7 @@ GET /api/products?category=silver-bar&featured=true
 }
 ```
 
-ورودی اشتباه: `401` با پیام فارسی عمومی؛ پاسخ مشخص نمی‌کند نام کاربری وجود دارد یا خیر.
+ورودی اشتباه: `401` با پیام فارسی عمومی؛ پاسخ مشخص نمی‌کند نام کاربری وجود دارد یا خیر. پس از پنج تلاش ناموفق برای ترکیب IP و نام کاربری، درخواست بعدی تا ۱۵ دقیقه `429` می‌گیرد. ورود موفق شمارنده همان کلید را پاک می‌کند.
 
 ### `POST /api/auth/register`
 
@@ -166,7 +186,7 @@ GET /api/products?category=silver-bar&featured=true
 }
 ```
 
-ایمیل به‌عنوان Username نیز ذخیره می‌شود. ایمیل تکراری `400` است. در نسخه production باید validation پیچیدگی رمز، قالب ایمیل و rate limit افزوده شود.
+ایمیل به‌عنوان Username نیز ذخیره می‌شود. ایمیل تکراری `400` است. نام حداقل ۳ نویسه، رمز حداقل ۸ نویسه، قالب ایمیل و شماره موبایل ایران سمت API اعتبارسنجی می‌شوند.
 
 ## 6. حساب مشتری
 
@@ -188,6 +208,18 @@ GET /api/products?category=silver-bar&featured=true
 
 فقط سفارش‌های کاربر جاری را همراه اقلام، از جدید به قدیم برمی‌گرداند.
 
+### `PUT /api/account/password`
+
+```json
+{ "currentPassword": "current-secret", "newPassword": "new-secret-at-least-8" }
+```
+
+رمز فعلی باید صحیح و رمز جدید حداقل ۸ نویسه باشد. هش و salt جدید ساخته می‌شود و رمز خام ذخیره نمی‌شود.
+
+### `PATCH /api/account/orders/{id}/cancel`
+
+فقط مالک سفارش می‌تواند سفارش دارای وضعیت `در انتظار بررسی` را لغو کند. با موفقیت، وضعیت `لغو شده` و موجودی تمام اقلام بازگردانده می‌شود. سفارش متعلق به کاربر دیگر `404` و وضعیت غیرقابل‌لغو `400` است.
+
 ## 7. ثبت سفارش
 
 ### `POST /api/orders`
@@ -197,7 +229,7 @@ GET /api/products?category=silver-bar&featured=true
   "customerName": "سارا احمدی",
   "phone": "09121234567",
   "address": "تهران، ...",
-  "paymentMethod": "پرداخت آنلاین",
+  "paymentMethod": "پرداخت پس از تأیید کارشناس",
   "items": [
     { "productId": 1, "quantity": 2 }
   ]
@@ -211,6 +243,8 @@ GET /api/products?category=silver-bar&featured=true
 - Quantity باید مثبت و موجودی کافی باشد.
 - قیمت client نادیده گرفته می‌شود؛ مبلغ با قیمت پایگاه داده محاسبه می‌شود.
 - موجودی در همان عملیات کم می‌شود.
+- تعداد قلم‌های تکراری یک محصول پیش از کنترل موجودی با هم جمع می‌شود.
+- تنها روش فعلی `پرداخت پس از تأیید کارشناس` است؛ درگاه آنلاین در این نسخه وجود ندارد.
 - وضعیت اولیه `در انتظار بررسی` است.
 
 پاسخ موفق:
@@ -218,7 +252,7 @@ GET /api/products?category=silver-bar&featured=true
 ```json
 {
   "id": 3,
-  "orderNumber": "MS-260827-1234",
+  "orderNumber": "MS-260827-A1B2C3",
   "total": 7360000,
   "status": "در انتظار بررسی"
 }
@@ -254,7 +288,7 @@ GET /api/products?category=silver-bar&featured=true
 }
 ```
 
-در نبود سفارش `404` است. در production باید status whitelist و transition rule اجباری شود.
+در نبود سفارش `404` است. فقط شش وضعیت تعریف‌شده پذیرفته می‌شوند. سفارش لغوشده terminal است و قابل بازگردانی نیست. تغییر هر سفارش غیرلغو به `لغو شده` موجودی اقلام را بازمی‌گرداند؛ ماشین transition کامل‌تر همچنان در نقشه راه قرار دارد.
 
 ### قرارداد ایجاد و ویرایش محصول
 
@@ -275,6 +309,12 @@ GET /api/products?category=silver-bar&featured=true
 
 ایجاد موفق `201`، ویرایش موفق `200`، حذف موفق `204` و شناسه ناموجود `404` است.
 
+نامک محصول یکتا و محدود به حروف لاتین، عدد و خط تیره است. نام، دسته، توضیح، قیمت، موجودی، تصویر، عیار و وزن سمت API اعتبارسنجی می‌شوند. حذف محصول دارای سابقه سفارش با `409` رد می‌شود تا تاریخچه مالی از بین نرود.
+
+### تنظیمات مدیریت
+
+`GET/PUT /api/admin/settings` نام فروشگاه، تلفن، ایمیل، نشانی، اعلان بالای سایت و `ordersEnabled` را مدیریت می‌کند. غیرفعال‌کردن `ordersEnabled` باعث رد کنترل‌شده سفارش جدید می‌شود و مرور فروشگاه همچنان فعال می‌ماند.
+
 ## 9. خطاها
 
 ساختار عمومی خطاهای کسب‌وکار:
@@ -293,6 +333,7 @@ GET /api/products?category=silver-bar&featured=true
 | `403` | نقش فاقد مجوز |
 | `404` | منبع یافت نشد |
 | `409` | تعارض منبع یکتا مانند slug تکراری |
+| `429` | تلاش ورود ناموفق بیش از حد مجاز |
 | `500` | خطای غیرمنتظره؛ جزئیات فقط در log امن |
 
 ## 10. قواعد نسخه‌بندی آینده

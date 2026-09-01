@@ -68,6 +68,17 @@ export interface CustomerSummary {
   orders: number
 }
 
+export interface StoreSettings {
+  id?: number
+  storeName: string
+  supportPhone: string
+  supportEmail: string
+  address: string
+  announcement: string
+  ordersEnabled: boolean
+  updatedAt?: string
+}
+
 export interface BlogPost {
   id: number
   title: string
