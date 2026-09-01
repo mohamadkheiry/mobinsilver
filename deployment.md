@@ -12,7 +12,7 @@
 - پورت داخلی Kestrel: `5098`
 - Reverse proxy: Nginx کانتینری مستقل روی `192.168.20.196`؛ upstream برابر `192.168.10.111:5098`
 - دامنه و TLS: `mobinsilver.00f.ir` با گواهی اختصاصی Let's Encrypt و تمدید خودکار Certbot
-- آخرین استقرار تأییدشده: commit `bc449f87861a0741cc6c55907e72f2349ff3b14f` در تاریخ ۱۴۰۵/۰۶/۰۹
+- آخرین استقرار تأییدشده: commit `b1f4b0a064ae12c5adc32461342b04777d4ea5af` در تاریخ `2026-09-01`
 
 رمز SSH، کلید JWT و فایل محیطی سرور هرگز در مخزن قرار نمی‌گیرند. Nginx و میزبان برنامه چند پروژه دیگر دارند؛ فقط service، مسیر و server block نام‌برده در این سند باید تغییر کنند.
 
@@ -235,19 +235,21 @@ SQLite برای نصب تک‌نمونه و ترافیک محدود مناسب �
 
 ## 14. آخرین انتشار Production
 
-نسخه `f6c78f194a012ca247c8c9c278474d9f8bcd787a` در تاریخ `2026-09-01` روی سرور برنامه منتشر شد و از طریق `https://mobinsilver.00f.ir` در دسترس است.
+نسخه `b1f4b0a064ae12c5adc32461342b04777d4ea5af` در تاریخ `2026-09-01` روی سرور برنامه منتشر شد و از طریق `https://mobinsilver.00f.ir` در دسترس است.
 
 مشخصات قابل ممیزی این انتشار:
 
-- مسیر release: `/opt/mobinsilver/releases/f6c78f194a012ca247c8c9c278474d9f8bcd787a`
-- artifact نگهداری‌شده: `/opt/mobinsilver/artifacts/f6c78f1-linux-x64.tar.gz`
-- SHA-256 artifact: `b9de57892c97b091100c6fb35adc9472c9e775069c8b2f5bdb364ac60e96a06b`
-- بکاپ پیش از انتشار: `/opt/mobinsilver/backups/mobinsilver-before-f6c78f1-20260901T014026Z.db`
+- مسیر release: `/opt/mobinsilver/releases/b1f4b0a064ae12c5adc32461342b04777d4ea5af`
+- artifact نگهداری‌شده: `/opt/mobinsilver/artifacts/b1f4b0a-linux-x64.tar.gz`
+- SHA-256 artifact: `329bfc02239718d1d96215dc1e2c9d5af4b86b60ab9a170f482c8c1632e65e32`
+- بکاپ پیش از انتشار: `/opt/mobinsilver/backups/mobinsilver-before-b1f4b0a-20260901T195219Z.db`
 - سرویس: `active` و `enabled` با `Restart=always`
 - health داخلی و عمومی: `healthy`
 - داده قابل مشاهده: ۹ محصول و ۲۰ مقاله منتشرشده
-- آزمون مرورگری production: پنج سناریوی read-only فروشگاه، وبلاگ، موبایل و داشبورد مقالات Admin موفق
+- آزمون مرورگری production: پنج سناریوی read-only فروشگاه، وبلاگ/مقاله، موبایل، دسته‌بندی و داشبورد مقالات Admin موفق
+- asset فعال frontend: `index-D1lFW4bE.js`
+- journal سرویس پس از انتشار: بدون رخداد با سطح warning یا بالاتر
 - کنترل سرویس‌های مشترک: hash فهرست سرویس‌های در حال اجرا، به‌جز مبین سیلور، قبل و بعد یکسان بود
 - Nginx: در این انتشار هیچ پیکربندی، container یا سایت دیگری تغییر نکرد
 
-در نخستین تلاش، مالکیت پوشه مشترک SQLite به‌دلیل اجرای بازگشتی `chown` روی release دارای symlink تغییر کرد. health check شکست را تشخیص داد و symlink به release قبلی برگشت. مالکیت `/opt/mobinsilver/shared/App_Data` اصلاح و سرویس قبلی سالم تأیید شد؛ سپس انتشار با permission گذاری بدون دنبال‌کردن symlink و تعویض اتمیک `current` تکرار و موفق شد. قاعده عملیاتی این رخداد: روی release دارای symlink دیتابیس هرگز `chown -R` اجرا نشود و قبل و بعد از تعویض release، مالکیت پوشه shared صریحاً کنترل شود.
+در انتشار فعلی permission فایل‌های release پیش از ساخت symlink داده و با `find -xdev` تنظیم شد؛ هیچ دستور بازگشتی روی `App_Data` مشترک اجرا نشد. تعویض `current` اتمیک بود و health در سومین تلاش موفق شد، بنابراین rollback خودکار فعال نشد. قاعده عملیاتی ثابت: روی release دارای symlink دیتابیس هرگز `chown -R` اجرا نشود و پیش و پس از تعویض release، مالکیت پوشه shared صریحاً کنترل شود.
