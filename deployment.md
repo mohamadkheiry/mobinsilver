@@ -228,3 +228,22 @@ SQLite برای نصب تک‌نمونه و ترافیک محدود مناسب �
 - [عملیات و پشتیبانی](docs/operations-support.md)
 - [راهبرد تست](docs/testing.md)
 - [معماری](docs/architecture.md)
+
+## 14. آخرین انتشار Production
+
+نسخه `f6c78f194a012ca247c8c9c278474d9f8bcd787a` در تاریخ `2026-09-01` روی سرور برنامه منتشر شد و از طریق `https://mobinsilver.00f.ir` در دسترس است.
+
+مشخصات قابل ممیزی این انتشار:
+
+- مسیر release: `/opt/mobinsilver/releases/f6c78f194a012ca247c8c9c278474d9f8bcd787a`
+- artifact نگهداری‌شده: `/opt/mobinsilver/artifacts/f6c78f1-linux-x64.tar.gz`
+- SHA-256 artifact: `b9de57892c97b091100c6fb35adc9472c9e775069c8b2f5bdb364ac60e96a06b`
+- بکاپ پیش از انتشار: `/opt/mobinsilver/backups/mobinsilver-before-f6c78f1-20260901T014026Z.db`
+- سرویس: `active` و `enabled` با `Restart=always`
+- health داخلی و عمومی: `healthy`
+- داده قابل مشاهده: ۹ محصول و ۲۰ مقاله منتشرشده
+- آزمون مرورگری production: پنج سناریوی read-only فروشگاه، وبلاگ، موبایل و داشبورد مقالات Admin موفق
+- کنترل سرویس‌های مشترک: hash فهرست سرویس‌های در حال اجرا، به‌جز مبین سیلور، قبل و بعد یکسان بود
+- Nginx: در این انتشار هیچ پیکربندی، container یا سایت دیگری تغییر نکرد
+
+در نخستین تلاش، مالکیت پوشه مشترک SQLite به‌دلیل اجرای بازگشتی `chown` روی release دارای symlink تغییر کرد. health check شکست را تشخیص داد و symlink به release قبلی برگشت. مالکیت `/opt/mobinsilver/shared/App_Data` اصلاح و سرویس قبلی سالم تأیید شد؛ سپس انتشار با permission گذاری بدون دنبال‌کردن symlink و تعویض اتمیک `current` تکرار و موفق شد. قاعده عملیاتی این رخداد: روی release دارای symlink دیتابیس هرگز `chown -R` اجرا نشود و قبل و بعد از تعویض release، مالکیت پوشه shared صریحاً کنترل شود.

@@ -112,3 +112,9 @@
 ## نکته ابزار QA
 
 کنترل مرورگر داخل برنامه در این اجرا با خطای محیطی `failed to write kernel assets ... os error 3` قابل راه‌اندازی نبود. طبق مسیر fallback، Playwright پروژه با Microsoft Edge واقعی استفاده شد؛ تمام ده سناریو و screenshotهای native با همان مرورگر اجرا و ثبت شدند.
+
+## نتیجه انتشار نهایی
+
+نسخه commit `f6c78f194a012ca247c8c9c278474d9f8bcd787a` پس از سبزشدن CI روی دامنه production منتشر شد. علاوه بر ده سناریوی کامل محلی، پنج سناریوی read-only با Microsoft Edge مستقیماً روی `https://mobinsilver.00f.ir` اجرا و موفق شدند: پوسته کامل فروشگاه، جستجو و فیلتر وبلاگ و فهرست مطالب مقاله، چیدمان موبایل و منوی آن، نبود overflow در storefront موبایل و ورود Admin/دسترسی به مدیریت ۲۰ مقاله.
+
+کنترل‌های runtime نیز پاسخ `200` صفحه اصلی، health سالم، تنظیمات عمومی ایمن، فعال‌بودن سفارش‌گیری، ۹ محصول، ۲۰ مقاله، asset نسخه جدید، HSTS، `nosniff` و `strict-origin-when-cross-origin` را تأیید کردند. سرویس systemd فعال و enabled است، `Restart=always` دارد و از symlink نسخه‌دار `current` اجرا می‌شود. هیچ تغییری روی Nginx یا سرویس‌های سایت‌های دیگر اعمال نشد.
