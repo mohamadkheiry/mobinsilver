@@ -28,6 +28,16 @@ jobs:
       - name: Build
         run: dotnet build src/MobinSilver.Api/MobinSilver.Api.csproj -c Release --no-restore
 
+      - name: NuGet vulnerability audit
+        shell: bash
+        run: |
+          report="$(dotnet list src/MobinSilver.Api/MobinSilver.Api.csproj package --vulnerable --include-transitive)"
+          printf '%s\n' "$report"
+          if grep -q "has the following vulnerable packages" <<<"$report"; then
+            echo "High or known vulnerable NuGet dependency detected."
+            exit 1
+          fi
+
   frontend:
     name: Frontend build and audit
     runs-on: ubuntu-latest

@@ -17,7 +17,7 @@ export function HomePage() {
   const [posts, setPosts] = useState<BlogPost[]>([])
   const [active, setActive] = useState('all')
   const [loading, setLoading] = useState(true); const [error, setError] = useState('')
-  useEffect(() => { Promise.all([api.products('?featured=true'), api.blogPosts()]).then(([nextProducts, nextPosts]) => { setProducts(nextProducts); setPosts(nextPosts) }).catch(() => setError('در حال حاضر دریافت تازه‌ترین محصولات ممکن نیست.')).finally(() => setLoading(false)) }, [])
+  useEffect(() => { Promise.allSettled([api.products('?featured=true'), api.blogPosts()]).then(([productResult, blogResult]) => { if (productResult.status === 'fulfilled') setProducts(productResult.value); else setError('در حال حاضر دریافت تازه‌ترین محصولات ممکن نیست.'); if (blogResult.status === 'fulfilled') setPosts(blogResult.value) }).finally(() => setLoading(false)) }, [])
   const shown = active === 'all' ? products.slice(0, 4) : products.filter(x => x.category === active).slice(0, 4)
   return (
     <>

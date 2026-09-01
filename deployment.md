@@ -40,8 +40,12 @@
 | `Jwt__Issuer` | صادرکننده token | `MobinSilver.Api` |
 | `Jwt__Audience` | مخاطب token | `MobinSilver.Web` |
 | `ConnectionStrings__Default` | اتصال پایگاه داده | مسیر امن یا connection string |
+| `BootstrapAdmin__Username` | نام کاربری مدیر اولیه؛ فقط وقتی پایگاه داده کاربر ندارد | secret/config |
+| `BootstrapAdmin__Email` | ایمیل مدیر اولیه؛ فقط وقتی پایگاه داده کاربر ندارد | secret/config |
+| `BootstrapAdmin__Password` | رمز قوی مدیر اولیه؛ در Production برای پایگاه داده خالی الزامی است | secret |
+| `ForwardedHeaders__KnownProxies__0` | IP پراکسی معتمد که `X-Forwarded-*` را ارسال می‌کند | `192.168.20.196` |
 
-کلیدها را در فایل tracked، تصویر Docker، command history عمومی یا CI log قرار ندهید.
+کلیدها را در فایل tracked، تصویر Docker، command history عمومی یا CI log قرار ندهید. برنامه در Production کلید JWT پیش‌فرض یا کوتاه‌تر از ۳۲ بایت را نمی‌پذیرد. `BootstrapAdmin__Password` پس از ایجاد نخستین مدیر دیگر خوانده نمی‌شود و باید از محیط حذف یا rotate شود.
 
 ## 3. Build قابل تکرار
 

@@ -167,6 +167,7 @@ docs(deploy): document reverse proxy headers
 ```powershell
 dotnet restore src/MobinSilver.Api/MobinSilver.Api.csproj
 dotnet build src/MobinSilver.Api/MobinSilver.Api.csproj -c Release
+dotnet list src/MobinSilver.Api/MobinSilver.Api.csproj package --vulnerable --include-transitive
 
 cd src/mobin-silver-web
 npm ci
@@ -190,7 +191,7 @@ npm audit --omit=dev
 ## 11. ارتقای وابستگی‌ها
 
 - ارتقاها را کوچک و دوره‌ای انجام دهید.
-- قبل و بعد از ارتقا `npm audit` و build را اجرا کنید.
+- قبل و بعد از ارتقا `npm audit`، ممیزی NuGet و هر دو build را اجرا کنید.
 - release note رسمی .NET، React Router و Vite را بررسی کنید.
 - ارتقای major باید Pull Request مستقل و برنامه rollback داشته باشد.
 - فایل lock باید همراه `package.json` commit شود.

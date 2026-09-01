@@ -14,20 +14,24 @@ interface AuthValue {
 const AuthContext = createContext<AuthValue | null>(null)
 
 function storedUser(): User | null {
+  if (!localStorage.getItem('mobin-silver-token')) {
+    localStorage.removeItem('mobin-silver-user')
+    return null
+  }
   try { return JSON.parse(localStorage.getItem('mobin-silver-user') ?? 'null') as User | null } catch { return null }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(storedUser)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(() => Boolean(localStorage.getItem('mobin-silver-token')))
 
   useEffect(() => {
-    if (!localStorage.getItem('mobin-silver-token')) return
+    if (!localStorage.getItem('mobin-silver-token')) { setLoading(false); return }
     api.profile().then(nextUser => {
       localStorage.setItem('mobin-silver-user', JSON.stringify(nextUser)); setUser(nextUser)
     }).catch(() => {
       localStorage.removeItem('mobin-silver-token'); localStorage.removeItem('mobin-silver-user'); setUser(null)
-    })
+    }).finally(() => setLoading(false))
   }, [])
 
   const save = useCallback((nextUser: User, token: string) => {

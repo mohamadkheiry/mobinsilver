@@ -13,9 +13,11 @@ export function BlogPage() {
   const [category, setCategory] = useState('همه مطالب')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const deferredSearch = useDeferredValue(search.trim())
 
-  useEffect(() => { api.blogPosts().then(setPosts).finally(() => setLoading(false)) }, [])
+  const load = () => { setLoading(true); setError(''); api.blogPosts().then(setPosts).catch(reason => { setPosts([]); setError(reason instanceof Error ? reason.message : 'مقاله‌ها دریافت نشدند.') }).finally(() => setLoading(false)) }
+  useEffect(load, [])
   const featured = posts.find(post => post.featured) ?? posts[0]
   const shown = useMemo(() => posts.filter(post => {
     const categoryMatch = category === 'همه مطالب' || post.category === category
@@ -31,7 +33,7 @@ export function BlogPage() {
 
     <section className="section blog-list-section"><div className="container"><div className="blog-filter" role="tablist" aria-label="دسته‌بندی مقاله‌ها">{categories.map(item => <button role="tab" aria-selected={item === category} className={item === category ? 'active' : ''} onClick={() => setCategory(item)} key={item}>{item}</button>)}</div>
       <div className="blog-list-heading"><div><span>تازه‌های مجله</span><h2>{category === 'همه مطالب' ? 'آخرین مقاله‌ها' : category}</h2></div><small>{new Intl.NumberFormat('fa-IR').format(shown.length)} مطلب</small></div>
-      {loading ? <div className="blog-empty">در حال دریافت مقاله‌ها...</div> : shown.length ? <div className="blog-magazine-grid">{shown.map((post, index) => <BlogCard key={post.id} post={post} variant={index % 3 === 0 ? 'horizontal' : 'standard'} />)}</div> : <div className="blog-empty"><BookOpenText /><h2>مطلبی پیدا نشد</h2><p>عبارت جستجو یا دسته‌بندی را تغییر دهید.</p></div>}
+      {loading ? <div className="blog-empty" role="status">در حال دریافت مقاله‌ها...</div> : error ? <div className="blog-empty" role="alert"><BookOpenText /><h2>دریافت مقاله‌ها ممکن نشد</h2><p>{error}</p><button className="button button--emerald" onClick={load}>تلاش دوباره</button></div> : shown.length ? <div className="blog-magazine-grid">{shown.map((post, index) => <BlogCard key={post.id} post={post} variant={index % 3 === 0 ? 'horizontal' : 'standard'} />)}</div> : <div className="blog-empty"><BookOpenText /><h2>مطلبی پیدا نشد</h2><p>عبارت جستجو یا دسته‌بندی را تغییر دهید.</p></div>}
     </div></section>
   </main>
 }

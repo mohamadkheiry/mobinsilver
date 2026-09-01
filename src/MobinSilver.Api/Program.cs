@@ -1,8 +1,11 @@
 using System.Security.Claims;
 using System.Text;
 using System.Net.Mail;
+using System.Net;
+using System.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.Caching.Memory;
@@ -17,16 +20,21 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
-    policy.WithOrigins("http://localhost:5173", "http://127.0.0.1:5173", "https://mobinsilver.00f.ir", "http://mobinsilver.00f.ir")
+    policy.WithOrigins("http://localhost:5173", "http://127.0.0.1:5173", "https://mobinsilver.00f.ir")
         .AllowAnyHeader().AllowAnyMethod()));
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
     options.KnownNetworks.Clear();
     options.KnownProxies.Clear();
+    foreach (var value in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? Array.Empty<string>())
+        if (IPAddress.TryParse(value, out var address)) options.KnownProxies.Add(address);
 });
 
-var jwtKey = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!);
+var jwtSecret = builder.Configuration["Jwt:Key"] ?? string.Empty;
+if (Encoding.UTF8.GetByteCount(jwtSecret) < 32 || (!builder.Environment.IsDevelopment() && jwtSecret.StartsWith("CHANGE-ME", StringComparison.Ordinal)))
+    throw new InvalidOperationException("Jwt:Key must be a non-default secret of at least 32 bytes outside Development.");
+var jwtKey = Encoding.UTF8.GetBytes(jwtSecret);
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -60,7 +68,7 @@ using (var scope = app.Services.CreateScope())
     db.Database.EnsureCreated();
     BlogSeed.EnsureSchema(db);
     StoreSchema.Ensure(db);
-    SeedData(db);
+    SeedData(db, app.Configuration, app.Environment);
     BlogSeed.Seed(db);
 }
 
@@ -207,33 +215,51 @@ app.MapPost("/api/orders", async (CreateOrderRequest request, ClaimsPrincipal pr
     var storeSetting = await db.StoreSettings.AsNoTracking().OrderBy(x => x.Id).FirstAsync();
     if (!storeSetting.OrdersEnabled) return Results.BadRequest(new { message = "ثبت سفارش موقتاً غیرفعال است. لطفاً با پشتیبانی تماس بگیرید." });
     if (request.Items is null || request.Items.Count == 0) return Results.BadRequest(new { message = "سبد خرید خالی است." });
+    if (request.Items.Count > 100) return Results.BadRequest(new { message = "هر سفارش نمی‌تواند بیشتر از ۱۰۰ ردیف داشته باشد." });
     if (string.IsNullOrWhiteSpace(request.CustomerName) || request.CustomerName.Trim().Length < 3 || !IsValidIranianPhone(request.Phone) || string.IsNullOrWhiteSpace(request.Address) || request.Address.Trim().Length < 10)
         return Results.BadRequest(new { message = "اطلاعات تحویل‌گیرنده کامل یا معتبر نیست." });
     if (request.PaymentMethod != "پرداخت پس از تأیید کارشناس")
         return Results.BadRequest(new { message = "روش پرداخت انتخاب‌شده معتبر نیست." });
+    if (request.Items.Any(x => x.Quantity is < 1 or > 100))
+        return Results.BadRequest(new { message = "تعداد هر محصول باید بین ۱ تا ۱۰۰ باشد." });
+    var requestedQuantities = request.Items.GroupBy(x => x.ProductId)
+        .ToDictionary(group => group.Key, group => group.Sum(x => (long)x.Quantity));
+    if (requestedQuantities.Any(x => x.Value > 100))
+        return Results.BadRequest(new { message = "مجموع تعداد هر محصول نمی‌تواند بیشتر از ۱۰۰ باشد." });
     var productIds = request.Items.Select(x => x.ProductId).Distinct().ToList();
-    var products = await db.Products.Where(x => productIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id);
-    if (products.Count != productIds.Count) return Results.BadRequest(new { message = "یکی از محصولات معتبر نیست." });
-    var requestedQuantities = request.Items.GroupBy(x => x.ProductId).ToDictionary(group => group.Key, group => group.Sum(x => x.Quantity));
-    if (request.Items.Any(x => x.Quantity < 1) || requestedQuantities.Any(x => products[x.Key].Stock < x.Value))
-        return Results.BadRequest(new { message = "موجودی یکی از محصولات کافی نیست." });
-    var order = new Order
+    try
     {
-        UserId = UserId(principal),
-        OrderNumber = $"MS-{DateTime.UtcNow:yyMMdd}-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}",
-        CustomerName = request.CustomerName.Trim(), Phone = request.Phone.Trim(), Address = request.Address.Trim(),
-        PaymentMethod = request.PaymentMethod, Status = "در انتظار بررسی", CreatedAt = DateTime.UtcNow
-    };
-    foreach (var item in request.Items)
-    {
-        var product = products[item.ProductId];
-        product.Stock -= item.Quantity;
-        order.Items.Add(new OrderItem { ProductId = product.Id, ProductName = product.Name, Quantity = item.Quantity, UnitPrice = product.Price });
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var products = await db.Products.Where(x => productIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id);
+        if (products.Count != productIds.Count) return Results.BadRequest(new { message = "یکی از محصولات معتبر نیست." });
+        foreach (var requested in requestedQuantities)
+        {
+            var quantity = checked((int)requested.Value);
+            var affected = await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE Products SET Stock = Stock - {quantity} WHERE Id = {requested.Key} AND Stock >= {quantity}");
+            if (affected != 1) return Results.BadRequest(new { message = "موجودی یکی از محصولات کافی نیست." });
+        }
+        var order = new Order
+        {
+            UserId = UserId(principal),
+            OrderNumber = $"MS-{DateTime.UtcNow:yyMMdd}-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}",
+            CustomerName = request.CustomerName.Trim(), Phone = request.Phone.Trim(), Address = request.Address.Trim(),
+            PaymentMethod = request.PaymentMethod, Status = "در انتظار بررسی", CreatedAt = DateTime.UtcNow
+        };
+        foreach (var requested in requestedQuantities)
+        {
+            var product = products[requested.Key];
+            order.Items.Add(new OrderItem { ProductId = product.Id, ProductName = product.Name, Quantity = checked((int)requested.Value), UnitPrice = product.Price });
+        }
+        order.Total = order.Items.Sum(x => x.UnitPrice * x.Quantity);
+        db.Orders.Add(order);
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        return Results.Ok(new { order.Id, order.OrderNumber, order.Total, order.Status });
     }
-    order.Total = order.Items.Sum(x => x.UnitPrice * x.Quantity);
-    db.Orders.Add(order);
-    await db.SaveChangesAsync();
-    return Results.Ok(new { order.Id, order.OrderNumber, order.Total, order.Status });
+    catch (SqliteException exception) when (exception.SqliteErrorCode is 5 or 6)
+    {
+        return Results.Conflict(new { message = "موجودی در حال تغییر است؛ لطفاً چند لحظه دیگر دوباره تلاش کنید." });
+    }
 }).RequireAuthorization();
 
 app.MapMethods("/api/account/orders/{id:int}/cancel", new[] { "PATCH" }, async (int id, ClaimsPrincipal principal, AppDbContext db) =>
@@ -261,12 +287,12 @@ app.MapGet("/api/admin/dashboard", async (AppDbContext db) =>
     var chart = Enumerable.Range(0, 7).Select(offset =>
     {
         var date = today.AddDays(offset - 6);
-        var total = orders.Where(x => x.CreatedAt.Date == date).Sum(x => x.Total);
+        var total = orders.Where(x => x.CreatedAt.Date == date && CountsAsSale(x.Status)).Sum(x => x.Total);
         return new { date, total };
     });
     return Results.Ok(new
     {
-        salesToday = orders.Where(x => x.CreatedAt.Date == today).Sum(x => x.Total),
+        salesToday = orders.Where(x => x.CreatedAt.Date == today && CountsAsSale(x.Status)).Sum(x => x.Total),
         newOrders = orders.Count(x => x.Status == "در انتظار بررسی"),
         lowStock = products.Count(x => x.Stock <= 5), activeCustomers = customers,
         silverPrice = 3_680_000, goldPrice = 8_950_000, chart
@@ -281,8 +307,8 @@ app.MapMethods("/api/admin/orders/{id:int}/status", new[] { "PATCH" }, async (in
     var order = await db.Orders.Include(x => x.Items).FirstOrDefaultAsync(x => x.Id == id);
     if (order is null) return Results.NotFound();
     var nextStatus = request.Status.Trim();
-    if (order.Status == "لغو شده" && nextStatus != order.Status)
-        return Results.BadRequest(new { message = "سفارش لغوشده قابل بازگردانی نیست." });
+    if (nextStatus != order.Status && !AllowedOrderTransitions(order.Status).Contains(nextStatus))
+        return Results.BadRequest(new { message = "تغییر وضعیت انتخاب‌شده با مرحله فعلی سفارش سازگار نیست." });
     if (order.Status != "لغو شده" && nextStatus == "لغو شده")
     {
         var productIds = order.Items.Select(x => x.ProductId).ToList();
@@ -388,6 +414,15 @@ app.MapFallbackToFile("index.html");
 app.Run();
 
 static int UserId(ClaimsPrincipal principal) => int.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!);
+static bool CountsAsSale(string status) => status is "پرداخت شده" or "در حال آماده‌سازی" or "ارسال شده" or "تحویل شده";
+static string[] AllowedOrderTransitions(string status) => status switch
+{
+    "در انتظار بررسی" => new[] { "پرداخت شده", "لغو شده" },
+    "پرداخت شده" => new[] { "در حال آماده‌سازی", "لغو شده" },
+    "در حال آماده‌سازی" => new[] { "ارسال شده", "لغو شده" },
+    "ارسال شده" => new[] { "تحویل شده" },
+    _ => Array.Empty<string>()
+};
 static object ToAuthResponse(AppUser user, string token) => new
 {
     token, user = new { user.Id, user.Username, user.FullName, user.Email, user.Phone, user.Address, user.Role }
@@ -405,9 +440,9 @@ static string? ValidateProduct(ProductRequest request)
     if (string.IsNullOrWhiteSpace(request.Slug) || request.Slug.Any(ch => !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || char.IsDigit(ch) || ch == '-'))) return "نامک فقط می‌تواند شامل حروف انگلیسی، عدد و خط تیره باشد.";
     if (request.Category is not ("silver-bar" or "silver-jewelry" or "gold-bar")) return "دسته‌بندی محصول معتبر نیست.";
     if (string.IsNullOrWhiteSpace(request.Description) || request.Description.Trim().Length < 10) return "توضیحات محصول باید دست‌کم ۱۰ نویسه باشد.";
-    if (request.Price <= 0) return "قیمت محصول باید بیشتر از صفر باشد.";
+    if (request.Price is <= 0 or > 1_000_000_000_000m) return "قیمت محصول باید بین ۱ و یک‌هزار میلیارد تومان باشد.";
     if (request.Stock < 0) return "موجودی نمی‌تواند منفی باشد.";
-    if (string.IsNullOrWhiteSpace(request.ImageUrl) || !request.ImageUrl.StartsWith('/')) return "مسیر تصویر محصول معتبر نیست.";
+    if (!IsSafeAssetPath(request.ImageUrl)) return "مسیر تصویر محصول باید یک فایل داخلی معتبر در پوشه assets باشد.";
     if (string.IsNullOrWhiteSpace(request.Purity) || string.IsNullOrWhiteSpace(request.Weight)) return "عیار و وزن محصول الزامی است.";
     return null;
 }
@@ -435,8 +470,8 @@ static string? ValidateBlogPost(BlogPostRequest request)
     if (string.IsNullOrWhiteSpace(request.Slug) || request.Slug.Any(ch => !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || char.IsDigit(ch) || ch == '-'))) return "نامک فقط می‌تواند شامل حروف انگلیسی، عدد و خط تیره باشد.";
     if (string.IsNullOrWhiteSpace(request.Excerpt) || request.Excerpt.Trim().Length < 20) return "خلاصه مقاله باید دست‌کم ۲۰ نویسه باشد.";
     if (string.IsNullOrWhiteSpace(request.Content) || request.Content.Trim().Length < 80) return "متن مقاله باید دست‌کم ۸۰ نویسه باشد.";
-    if (string.IsNullOrWhiteSpace(request.CoverImageUrl) || !request.CoverImageUrl.StartsWith('/')) return "مسیر تصویر مقاله معتبر نیست.";
-    if (string.IsNullOrWhiteSpace(request.Category)) return "دسته‌بندی مقاله الزامی است.";
+    if (!IsSafeAssetPath(request.CoverImageUrl)) return "مسیر تصویر مقاله باید یک فایل داخلی معتبر در پوشه assets باشد.";
+    if (request.Category is not ("راهنمای خرید" or "دانش نقره" or "سرمایه‌گذاری" or "نگهداری و مراقبت")) return "دسته‌بندی مقاله معتبر نیست.";
     if (request.ReadingMinutes is < 1 or > 120) return "زمان مطالعه باید بین ۱ تا ۱۲۰ دقیقه باشد.";
     return null;
 }
@@ -452,14 +487,35 @@ static bool IsValidIranianPhone(string? value)
     var normalized = value.Trim().Replace(" ", "").Replace("-", "");
     return normalized.Length == 11 && normalized.StartsWith("09") && normalized.All(char.IsDigit);
 }
-static void SeedData(AppDbContext db)
+static bool IsSafeAssetPath(string? value)
+{
+    if (string.IsNullOrWhiteSpace(value)) return false;
+    var path = value.Trim();
+    return path.StartsWith("/assets/", StringComparison.Ordinal)
+        && !path.Contains("..", StringComparison.Ordinal)
+        && !path.Contains("//", StringComparison.Ordinal)
+        && !path.Contains('%')
+        && !path.Contains('?')
+        && !path.Contains('#')
+        && !path.Contains('\\');
+}
+static void SeedData(AppDbContext db, IConfiguration configuration, IWebHostEnvironment environment)
 {
     if (!db.Users.Any())
     {
-        var (adminHash, adminSalt) = PasswordService.Hash("admin123");
+        var adminUsername = configuration["BootstrapAdmin:Username"]?.Trim() ?? "admin";
+        var adminEmail = configuration["BootstrapAdmin:Email"]?.Trim().ToLowerInvariant() ?? "admin@mobinsilver.ir";
+        var adminPassword = configuration["BootstrapAdmin:Password"];
+        if (string.IsNullOrWhiteSpace(adminPassword))
+        {
+            if (!environment.IsDevelopment()) throw new InvalidOperationException("BootstrapAdmin:Password is required when creating the first production administrator.");
+            adminPassword = "admin123";
+        }
+        if (adminPassword.Length < 8) throw new InvalidOperationException("BootstrapAdmin:Password must contain at least 8 characters.");
+        var (adminHash, adminSalt) = PasswordService.Hash(adminPassword);
         var (userHash, userSalt) = PasswordService.Hash("sara123");
         db.Users.AddRange(
-            new AppUser { Username = "admin", Email = "admin@mobinsilver.ir", FullName = "مدیر فروشگاه", Role = "Admin", PasswordHash = adminHash, PasswordSalt = adminSalt },
+            new AppUser { Username = adminUsername, Email = adminEmail, FullName = "مدیر فروشگاه", Role = "Admin", PasswordHash = adminHash, PasswordSalt = adminSalt },
             new AppUser { Username = "sara", Email = "sara@mobinsilver.ir", FullName = "سارا احمدی", Phone = "09121234567", Address = "تهران، خیابان ونک، پلاک ۱۲", Role = "Customer", PasswordHash = userHash, PasswordSalt = userSalt }
         );
         db.SaveChanges();

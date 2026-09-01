@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { Menu, Search, ShoppingBag, UserRound, X } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useCart } from '../contexts/CartContext'
@@ -29,6 +29,12 @@ export function Header() {
     return () => { document.removeEventListener('keydown', close); document.body.classList.remove('nav-is-open') }
   }, [open])
   const dashboard = user?.role === 'Admin' ? '/admin' : user ? '/dashboard' : '/login'
+  const isActive = (target: string) => {
+    const [targetPath, targetQuery = ''] = target.split('?')
+    if (target === '/') return location.pathname === '/'
+    if (targetPath === '/shop' && targetQuery) return location.pathname === targetPath && location.search === `?${targetQuery}`
+    return location.pathname === targetPath && !targetQuery
+  }
   return (
     <>
       <div className="blessing-bar">{settings.announcement}</div>
@@ -37,7 +43,7 @@ export function Header() {
           <Brand />
           <nav className={`main-nav ${open ? 'main-nav--open' : ''}`} aria-label="ناوبری اصلی">
             <button className="icon-button nav-close" onClick={() => setOpen(false)} aria-label="بستن منو"><X /></button>
-            {links.map(link => <NavLink key={link.to} to={link.to} end={link.to === '/'} onClick={() => setOpen(false)}>{link.label}</NavLink>)}
+            {links.map(link => { const active = isActive(link.to); return <Link key={link.to} to={link.to} className={active ? 'active' : undefined} aria-current={active ? 'page' : undefined} onClick={() => setOpen(false)}>{link.label}</Link> })}
           </nav>
           {open ? <button className="nav-backdrop" onClick={() => setOpen(false)} aria-label="بستن منو" /> : null}
           <div className="header__actions">

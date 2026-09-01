@@ -121,6 +121,7 @@ MobinSilverStore/
 - [امنیت](docs/security.md)
 - [عملیات، مانیتورینگ و پشتیبانی](docs/operations-support.md)
 - [راهبرد تست](docs/testing.md)
+- [گزارش رگرسیون و سخت‌سازی v4](docs/quality-cycles-v4.md)
 - [گزارش پنج چرخه بازبینی و QA نسخه v3](docs/quality-cycles-v3.md)
 - [راهنمای فنی و محتوایی مجله](docs/blog.md)
 - [نقشه راه](docs/roadmap.md)
@@ -132,6 +133,7 @@ MobinSilverStore/
 
 ```powershell
 dotnet build src/MobinSilver.Api/MobinSilver.Api.csproj -c Release
+dotnet list src/MobinSilver.Api/MobinSilver.Api.csproj package --vulnerable --include-transitive
 cd src/mobin-silver-web
 npm ci
 npm run build
@@ -143,10 +145,10 @@ npm audit --omit=dev
 
 - بیلد Release بک‌اند: صفر خطا و صفر هشدار
 - بیلد production فرانت‌اند: موفق
-- Playwright: هر ۱۰ سناریوی E2E/API موفق
+- Playwright: هر ۱۶ سناریوی E2E/API موفق
 - ممیزی وابستگی production: صفر آسیب‌پذیری گزارش‌شده
 - ممیزی وابستگی‌های اصلی: صفر آسیب‌پذیری شناخته‌شده
-- ۴ سناریوی خودکار Playwright برای فروشگاه، مجله، موبایل و مدیریت: موفق
+- سناریوهای خودکار فروشگاه، مجله، موبایل، احراز هویت، سفارش و مدیریت: موفق
 - تست سبد، پنل‌ها و ناوبری: موفق
 - تست موبایل 390 پیکسل: بدون overflow افقی
 - خطاهای Console مرورگر: صفر

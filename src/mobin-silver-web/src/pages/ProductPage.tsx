@@ -14,7 +14,7 @@ export function ProductPage() {
   const [related, setRelated] = useState<Product[]>([]); const [error, setError] = useState('')
   const [quantity, setQuantity] = useState(1)
   const cart = useCart(); const favorites = useFavorites()
-  useEffect(() => { setProduct(null); setError(''); Promise.all([api.product(slug), api.products()]).then(([nextProduct, all]) => { setProduct(nextProduct); setRelated(all.filter(item => item.id !== nextProduct.id && item.category === nextProduct.category).slice(0, 4)) }).catch(reason => setError(reason instanceof Error ? reason.message : 'محصول پیدا نشد.')) }, [slug])
+  useEffect(() => { setProduct(null); setError(''); Promise.all([api.product(slug), api.products()]).then(([nextProduct, all]) => { setProduct(nextProduct); setRelated(all.filter(item => item.id !== nextProduct.id && item.category === nextProduct.category).slice(0, 4)); document.title = `${nextProduct.name} | مبین سیلور` }).catch(reason => setError(reason instanceof Error ? reason.message : 'محصول پیدا نشد.')); return () => { document.title = 'مبین سیلور' } }, [slug])
   if (error) return <section className="section"><div className="container empty-results" role="alert"><h1>محصول در دسترس نیست</h1><p>{error}</p><Link className="button button--emerald" to="/shop">بازگشت به فروشگاه</Link></div></section>
   if (!product) return <div className="page-loading" role="status">در حال دریافت محصول...</div>
   const favored = favorites.has(product.id)
